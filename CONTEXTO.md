@@ -29,7 +29,6 @@ varanda-app/
 ├── App.tsx                          — auth gate + tab navigator (mostra aba Gestão só se papel === 'sindico')
 ├── db/
 │   ├── varanda-schema.sql           — DDL completo, idempotente. FONTE DA VERDADE do banco.
-│   ├── migracao-arquivar-e-cancelar.sql — arquivar, cancelar reunião, unique (PENDENTE)
 │   └── snippets-teste.sql           — atalhos de SQL pro teste manual (não é migração)
 ├── lib/
 │   ├── supabase.ts                  — client Supabase configurado pra RN
@@ -79,10 +78,10 @@ insert into codigos_fundacao (codigo, observacao)
 values ('VARANDA-2026-ABC', 'Ed. Fulano — trial iniciado 20/08');
 ```
 
-**PENDENTE — `db/migracao-arquivar-e-cancelar.sql` ainda não foi rodado no Supabase** (20/08/2026):
+Arquivamento, cancelamento de reunião e unique de unidade, **aplicados no Supabase em 20/08/2026** e já dobrados dentro de `varanda-schema.sql`:
 - `arquivado_em` em `sugestoes` e `problemas` — soft delete; nada é apagado. Não precisou de policy nova: as de update do síndico já cobrem.
 - `cancelada_em` e `motivo_cancelamento` em `reunioes`, mais a policy `sindico edita reuniao` (a tabela tinha select e insert, faltava update).
-- índice único `unidades_sem_duplicata` — fecha a dívida técnica da duplicata de unidade. É índice de expressão com `coalesce(bloco, '')` porque em unique constraint dois NULLs não conflitam, e sem isso "sem bloco / 101" entraria infinitas vezes. **Se já houver duplicata no banco, a criação do índice falha** — o arquivo traz a query pra conferir antes.
+- índice único `unidades_sem_duplicata` — fecha a dívida técnica da duplicata de unidade. É índice de expressão com `coalesce(bloco, '')` porque em unique constraint dois NULLs não conflitam, e sem isso "sem bloco / 101" entraria infinitas vezes. Se um banco novo já tiver duplicata, a criação do índice falha — nesse caso, limpar antes de rodar o schema.
 
 **Sobre `telefone` e `foto_url` (era decisão em aberto, resolvida em 20/08/2026):** RLS é por linha, não por coluna, então a policy que deixa o vizinho ver seu `nome` libera a linha inteira de `usuarios` — telefone e foto junto. Mas ao implementar a lista de condôminos ficou claro que **nenhuma tela do app lê ou escreve essas duas colunas**: são colunas mortas desde o schema original, e não há telefone nenhum no banco pra vazar. A exposição é teórica.
 
@@ -116,7 +115,9 @@ Corrigido nesta sessão:
 - **Comentários no Mural** (Fase 1 do roadmap): card expande, lista comentários, campo pra escrever, síndico remove comentário. Primeira vez que a tabela `comentarios` é usada.
 - Push notifications e analytics **adiados por decisão** de 20/08/2026 — ver Parte 4.
 - **Lista de condôminos** (fecha a Fase 2 do roadmap): quem entrou, unidade por unidade, com resumo de adesão no topo — % de unidades ocupadas é o embrião da métrica que o trial vai precisar.
-- **Tempo em aberto nos Problemas, arquivar solicitações e cancelar reunião** — os três dependem de `db/migracao-arquivar-e-cancelar.sql`, que ainda não rodou. Sem ela as telas quebram no `arquivado_em`/`cancelada_em` inexistente.
+- **Tempo em aberto nos Problemas, arquivar solicitações e cancelar reunião** — migração aplicada e dobrada no schema.
+
+Ambiente: decidido em 20/08/2026 continuar testando **só no celular**. Não há SDK Android na máquina (os quatro Unity instalados estão sem o módulo AndroidPlayer), e emulador custaria ~10 GB. Expo Web foi descartado porque `react-native-web` não implementa `Alert`, e este app usa `Alert.alert` para todo feedback de erro e toda confirmação destrutiva — testar lá esconderia justamente a classe de bug mais comum aqui. O emulador só passa a valer quando a dor for testar síndico e morador lado a lado.
 
 MVP funcionalmente completo e testado (antes desta sessão): cadastro → vínculo por código de convite → aprovação pelo síndico → Mural, Sugestões (com apoio), Problemas (com histórico de status), Oficial (avisos fixados, votação por unidade, reunião com RSVP e seletor de data/hora nativo) → Gestão do síndico pra tudo isso.
 

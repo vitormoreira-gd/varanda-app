@@ -39,6 +39,12 @@ create table if not exists unidades (
   codigo_convite text unique default substr(md5(random()::text), 1, 8)
 );
 
+-- Indice de expressao em vez de constraint porque `bloco` e nullable e em
+-- unique constraint dois NULLs nao conflitam: sem o coalesce, "sem bloco /
+-- 101" entraria infinitas vezes.
+create unique index if not exists unidades_sem_duplicata
+  on unidades (condominio_id, coalesce(bloco, ''), numero);
+
 -- ---------- USUÁRIOS ----------
 create table if not exists usuarios (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -107,6 +113,7 @@ create table if not exists sugestoes (
   descricao text not null,
   categoria text,
   status status_sugestao not null default 'analise',
+  arquivado_em timestamptz,
   criado_em timestamptz not null default now()
 );
 
@@ -127,6 +134,7 @@ create table if not exists problemas (
   descricao text not null,
   foto_url text,
   status status_item not null default 'aberto',
+  arquivado_em timestamptz,
   criado_em timestamptz not null default now()
 );
 
@@ -181,6 +189,10 @@ create table if not exists reunioes (
   data_hora timestamptz not null,
   local text,
   pauta text,
+  -- Cancelamento e soft de proposito: quem confirmou presenca precisa VER
+  -- que foi cancelada. Apagar a linha faria a reuniao sumir em silencio.
+  cancelada_em timestamptz,
+  motivo_cancelamento text,
   criado_em timestamptz not null default now()
 );
 
@@ -439,6 +451,11 @@ create policy "ver reunioes do meu condominio" on reunioes
 drop policy if exists "sindico cria reuniao" on reunioes;
 create policy "sindico cria reuniao" on reunioes
   for insert with check (eh_sindico(condominio_id) and autor_id = auth.uid());
+
+-- reunioes tinha select e insert; o update entrou junto do cancelamento.
+drop policy if exists "sindico edita reuniao" on reunioes;
+create policy "sindico edita reuniao" on reunioes
+  for update using (eh_sindico(condominio_id));
 
 drop policy if exists "ver rsvps" on rsvps;
 create policy "ver rsvps" on rsvps
