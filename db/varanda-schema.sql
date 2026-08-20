@@ -207,6 +207,22 @@ as $$
   );
 $$;
 
+-- Quem sao os usuarios que dividem condominio comigo. Security definer
+-- pra evitar recursao de RLS: vinculos tem policy propria e seria
+-- reavaliado dentro da policy de usuarios.
+create or replace function usuarios_do_meu_condominio()
+returns setof uuid
+language sql
+security definer
+stable
+as $$
+  select distinct v.usuario_id
+  from vinculos v
+  join unidades u on u.id = v.unidade_id
+  where v.status = 'aprovado'
+    and u.condominio_id in (select condominios_do_usuario());
+$$;
+
 -- ============================================================
 -- RLS
 -- ============================================================
@@ -230,6 +246,14 @@ alter table rsvps enable row level security;
 drop policy if exists "usuario ve proprio perfil" on usuarios;
 create policy "usuario ve proprio perfil" on usuarios
   for select using (id = auth.uid());
+
+-- Sem esta policy cada usuario so enxerga o proprio perfil, o embed
+-- usuarios!autor_id(nome) do Mural volta null e todo post aparece como
+-- "Vizinho". Atencao: RLS e por linha, nao por coluna — libera telefone
+-- e foto_url junto com o nome.
+drop policy if exists "ver vizinhos do meu condominio" on usuarios;
+create policy "ver vizinhos do meu condominio" on usuarios
+  for select using (id in (select usuarios_do_meu_condominio()));
 
 drop policy if exists "usuario edita proprio perfil" on usuarios;
 create policy "usuario edita proprio perfil" on usuarios
@@ -281,6 +305,10 @@ drop policy if exists "curtir post" on curtidas;
 create policy "curtir post" on curtidas
   for insert with check (usuario_id = auth.uid());
 
+drop policy if exists "descurtir post" on curtidas;
+create policy "descurtir post" on curtidas
+  for delete using (usuario_id = auth.uid());
+
 drop policy if exists "ver comentarios" on comentarios;
 create policy "ver comentarios" on comentarios
   for select using (
@@ -315,6 +343,10 @@ create policy "ver apoios" on apoios
 drop policy if exists "apoiar sugestao" on apoios;
 create policy "apoiar sugestao" on apoios
   for insert with check (usuario_id = auth.uid());
+
+drop policy if exists "retirar apoio" on apoios;
+create policy "retirar apoio" on apoios
+  for delete using (usuario_id = auth.uid());
 
 drop policy if exists "ver problemas do meu condominio" on problemas;
 create policy "ver problemas do meu condominio" on problemas
@@ -396,6 +428,10 @@ create policy "ver rsvps" on rsvps
 drop policy if exists "confirmar presenca" on rsvps;
 create policy "confirmar presenca" on rsvps
   for insert with check (usuario_id = auth.uid());
+
+drop policy if exists "desmarcar presenca" on rsvps;
+create policy "desmarcar presenca" on rsvps
+  for delete using (usuario_id = auth.uid());
 
 drop policy if exists "ver meu condominio" on condominios;
 create policy "ver meu condominio" on condominios

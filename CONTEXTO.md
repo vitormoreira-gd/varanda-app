@@ -29,7 +29,6 @@ varanda-app/
 ├── App.tsx                          — auth gate + tab navigator (mostra aba Gestão só se papel === 'sindico')
 ├── db/
 │   ├── varanda-schema.sql           — DDL completo, idempotente. FONTE DA VERDADE do banco.
-│   └── patch-politicas-faltantes.sql — policies que faltavam (PENDENTE de rodar no Supabase)
 ├── lib/
 │   ├── supabase.ts                  — client Supabase configurado pra RN
 │   ├── datas.ts                     — formatarDataHora(), sem depender de Intl
@@ -58,13 +57,11 @@ Conteúdo: `posts`/`curtidas`/`comentarios` (Mural), `sugestoes`/`apoios` (statu
 
 Multi-tenancy: isolamento entre condomínios via RLS, toda tabela filtrada por `condominio_id` (direto ou via join). Duas funções `security definer` auxiliares: `condominios_do_usuario()` e `eh_sindico(condominio_id)`, usadas dentro das policies.
 
-**PENDENTE — `db/patch-politicas-faltantes.sql` ainda não foi rodado no Supabase.** Quatro policies que faltavam, todas descobertas ao ler o schema (20/08/2026):
+Quatro policies que faltavam foram descobertas ao ler o schema e **aplicadas no Supabase em 20/08/2026**, já dobradas dentro de `varanda-schema.sql`:
 1. `delete` em `curtidas` — sem ela, curtir só funciona de ida.
 2. `delete` em `rsvps` — sem ela, "desmarcar presença" nunca removeu nada.
 3. `delete` em `apoios` — mesma coisa pra retirar apoio de sugestão.
 4. `select` em `usuarios` pra vizinhos do mesmo condomínio (via nova função `usuarios_do_meu_condominio()`) — antes cada usuário só enxergava o próprio perfil, então o embed `usuarios!autor_id(nome)` do Mural voltava null e todo post aparecia como "Vizinho".
-
-Depois de rodar, dobrar o conteúdo dentro de `varanda-schema.sql` e apagar o patch, pra não repetir o problema de DDL que só existe fora do repo.
 
 **Decisão em aberto (item 4):** RLS é por linha, não por coluna. Liberar a linha de `usuarios` pro vizinho libera `telefone` e `foto_url` junto com `nome` — a UI mostrar só o nome não protege, quem chamar a API direto vê tudo. Isso conflita com o item de backlog "lista de condôminos visível só pro síndico (nome, unidade, papel, **contato**)". Se contato tiver que ser restrito, o caminho é mover telefone pra uma tabela separada com policy própria.
 
@@ -85,6 +82,9 @@ Corrigido nesta sessão:
 - **Votação estava quebrada** — `useMeuCondominio` nunca retornou `unidadeId` (o `OficialScreen` destruturava e recebia `undefined`), então nenhum voto passava e o histórico "já votei" nunca carregava. Contradizia o "MVP completo e testado" abaixo; provavelmente quebrou num refactor posterior ao teste.
 - Feed com data/hora, curtidas e moderação (ver backlog).
 - `delete` de RSVP agora detecta bloqueio de RLS em vez de falhar calado.
+- Quatro policies que faltavam no banco, aplicadas e dobradas no schema (ver Parte 1).
+
+Aberto: `apoios` agora aceita `delete`, mas nenhuma tela usa — retirar apoio de uma sugestão continua sem botão em `SugestoesScreen`.
 
 MVP funcionalmente completo e testado (antes desta sessão): cadastro → vínculo por código de convite → aprovação pelo síndico → Mural, Sugestões (com apoio), Problemas (com histórico de status), Oficial (avisos fixados, votação por unidade, reunião com RSVP e seletor de data/hora nativo) → Gestão do síndico pra tudo isso.
 
@@ -101,13 +101,13 @@ Vitor — dev de jogos mobile (Unity/C#), sem familiaridade prévia com Supabase
 ## Backlog — itens levantados pelo dono do projeto
 
 ### Mural
-- [x] Curtir mensagens do feed — toggle otimista no card, contador vem do embed `curtidas(usuario_id)`. **Descurtir depende do patch de policies.**
+- [x] Curtir mensagens do feed — toggle otimista no card, contador vem do embed `curtidas(usuario_id)`
 - [x] Mostrar dia/horário de cada mensagem no feed — `lib/datas.ts` + cabeçalho do card no Mural
 - [x] Moderação do feed — botão "Remover" no card, visível só pra `papel === 'sindico'`, com confirmação. Remove post; remoção de comentário fica pra quando o feed tiver comentários na UI.
 - [ ] Respostas a mensagens no feed, estilo thread (responder um post específico, não só comentar solto)
 
 ### Reuniões
-- [~] Permitir desmarcar presença — o código já fazia o `delete` desde sempre, mas **faltava a policy no banco**, então nunca removeu nada. Código endurecido pra detectar isso; fecha de vez quando o patch rodar.
+- [x] Permitir desmarcar presença — o código já fazia o `delete` desde sempre, mas faltava a policy no banco, então nunca removeu nada. Policy aplicada em 20/08/2026
 - [ ] Síndico poder cancelar reunião, com opção de já mandar um aviso junto avisando o cancelamento
 
 ### Reserva de salão
