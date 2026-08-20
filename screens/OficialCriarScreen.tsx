@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -245,6 +245,128 @@ export function CriarReuniaoForm() {
   );
 }
 
+type ReuniaoAgendada = {
+  id: string;
+  titulo: string;
+  data_hora: string;
+  local: string | null;
+  cancelada_em: string | null;
+};
+
+/**
+ * Reuniões futuras, com cancelamento. O cancelamento é soft (grava
+ * `cancelada_em`) porque quem confirmou presença precisa VER que foi
+ * cancelada — apagar faria a reunião sumir em silêncio da tela do morador.
+ */
+export function ProximasReunioes() {
+  const { condominioId } = useMeuCondominio();
+  const [lista, setLista] = useState<ReuniaoAgendada[]>([]);
+
+  const carregar = useCallback(async () => {
+    if (!condominioId) return;
+    const { data, error } = await supabase
+      .from('reunioes')
+      .select('id, titulo, data_hora, local, cancelada_em')
+      .gte('data_hora', new Date().toISOString())
+      .order('data_hora', { ascending: true });
+
+    if (error) {
+      Alert.alert('Erro ao carregar reuniões', error.message);
+      return;
+    }
+    setLista(data ?? []);
+  }, [condominioId]);
+
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
+
+  function confirmarCancelamento(r: ReuniaoAgendada) {
+    Alert.alert(
+      'Cancelar reunião',
+      `"${r.titulo}", marcada para ${new Date(r.data_hora).toLocaleString('pt-BR')}.\n\nQuer publicar um aviso avisando do cancelamento?`,
+      [
+        { text: 'Voltar', style: 'cancel' },
+        { text: 'Só cancelar', onPress: () => cancelar(r, false) },
+        { text: 'Cancelar e avisar', onPress: () => cancelar(r, true) },
+      ]
+    );
+  }
+
+  async function cancelar(r: ReuniaoAgendada, publicarAviso: boolean) {
+    const { data, error } = await supabase
+      .from('reunioes')
+      .update({ cancelada_em: new Date().toISOString() })
+      .eq('id', r.id)
+      .select();
+
+    if (error) {
+      Alert.alert('Erro ao cancelar', error.message);
+      return;
+    }
+    // Update bloqueado por RLS não devolve erro, devolve zero linhas.
+    if (!data || data.length === 0) {
+      Alert.alert(
+        'Não consegui cancelar',
+        'O banco recusou a alteração. Falta rodar db/migracao-arquivar-e-cancelar.sql (policy "sindico edita reuniao").'
+      );
+      return;
+    }
+
+    if (publicarAviso && condominioId) {
+      const { data: userData } = await supabase.auth.getUser();
+      const quando = new Date(r.data_hora).toLocaleString('pt-BR');
+      const { error: erroAviso } = await supabase.from('avisos').insert({
+        titulo: `Reunião cancelada: ${r.titulo}`,
+        texto: `A reunião marcada para ${quando}${r.local ? ` no ${r.local}` : ''} foi cancelada.`,
+        condominio_id: condominioId,
+        autor_id: userData.user?.id,
+        fixado: true,
+      });
+      if (erroAviso) {
+        Alert.alert('Reunião cancelada, mas o aviso falhou', erroAviso.message);
+        carregar();
+        return;
+      }
+    }
+
+    carregar();
+  }
+
+  if (lista.length === 0) {
+    return <Text style={styles.vazio}>Nenhuma reunião futura agendada.</Text>;
+  }
+
+  return (
+    <View style={{ marginTop: 16, gap: 8 }}>
+      <Text style={styles.secao}>Reuniões agendadas</Text>
+      {lista.map((r) => {
+        const cancelada = !!r.cancelada_em;
+        return (
+          <View key={r.id} style={[styles.reuniaoCard, cancelada && styles.reuniaoCancelada]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.reuniaoTitulo, cancelada && styles.textoRiscado]}>
+                {r.titulo}
+              </Text>
+              <Text style={styles.reuniaoMeta}>
+                {new Date(r.data_hora).toLocaleString('pt-BR')}
+                {r.local ? ` · ${r.local}` : ''}
+              </Text>
+            </View>
+            {cancelada ? (
+              <Text style={styles.tagCancelada}>cancelada</Text>
+            ) : (
+              <Pressable onPress={() => confirmarCancelamento(r)} hitSlop={8}>
+                <Text style={styles.cancelar}>Cancelar</Text>
+              </Pressable>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 export default function OficialCriarScreen() {
   const [aba, setAba] = useState<'aviso' | 'votacao' | 'reuniao'>('aviso');
 
@@ -262,7 +384,12 @@ export default function OficialCriarScreen() {
 
       {aba === 'aviso' && <CriarAvisoForm />}
       {aba === 'votacao' && <CriarVotacaoForm />}
-      {aba === 'reuniao' && <CriarReuniaoForm />}
+      {aba === 'reuniao' && (
+        <>
+          <CriarReuniaoForm />
+          <ProximasReunioes />
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -303,4 +430,22 @@ const styles = StyleSheet.create({
   horarioTexto: { fontSize: 13, color: '#6B665D' },
   horarioTextoAtiva: { color: '#fff', fontWeight: '600' },
   horarioTextoAtivo: { color: '#fff', fontWeight: '600' },
+  secao: { fontSize: 13, fontWeight: '700', color: '#1B4B66', marginTop: 4 },
+  reuniaoCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E4DFD2',
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  reuniaoCancelada: { backgroundColor: '#F7F5EF' },
+  reuniaoTitulo: { fontSize: 14, fontWeight: '600', color: '#211F1B' },
+  reuniaoMeta: { fontSize: 11, color: '#6B665D', marginTop: 2 },
+  textoRiscado: { textDecorationLine: 'line-through', color: '#6B665D' },
+  tagCancelada: { fontSize: 11, color: '#B6512E', fontWeight: '600' },
+  cancelar: { fontSize: 12, color: '#B6512E', fontWeight: '600' },
+  vazio: { textAlign: 'center', color: '#6B665D', marginTop: 20, fontSize: 13 },
 });

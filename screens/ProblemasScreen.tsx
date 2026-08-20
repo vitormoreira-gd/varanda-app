@@ -12,8 +12,44 @@ import {
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useMeuCondominio } from '../lib/useMeuCondominio';
+import { diasDesde, emDias } from '../lib/datas';
 
 const CATEGORIAS = ['Hidráulica', 'Elétrica', 'Estrutural', 'Limpeza', 'Segurança'];
+
+const TOM_COR: Record<string, string> = {
+  neutro: '#6B665D',
+  atencao: '#C98A1F',
+  critico: '#B6512E',
+  ok: '#43715B',
+};
+
+/**
+ * Há quanto tempo o problema está parado. Conta da última mudança de status,
+ * não da abertura — é o "aberto há 5 dias sem atualização" que a pesquisa
+ * apontou como a queixa nº1 contra síndico.
+ */
+function tempoEmAberto(p: Problema): { texto: string; tom: string } {
+  const historico = [...(p.historico_status ?? [])].sort((a, b) =>
+    a.criado_em.localeCompare(b.criado_em)
+  );
+
+  if (p.status === 'resolvido') {
+    const resolvido = [...historico].reverse().find((h) => h.status === 'resolvido');
+    if (!resolvido) return { texto: 'resolvido', tom: 'ok' };
+    const dias = diasDesde(p.criado_em, new Date(resolvido.criado_em));
+    const quanto = dias === 0 ? 'menos de 1 dia' : dias === 1 ? '1 dia' : `${dias} dias`;
+    return { texto: `resolvido em ${quanto}`, tom: 'ok' };
+  }
+
+  const ultimaMovimentacao = historico.length
+    ? historico[historico.length - 1].criado_em
+    : p.criado_em;
+  const dias = diasDesde(ultimaMovimentacao);
+  const prefixo = p.status === 'aberto' ? 'aberto' : 'em andamento';
+  const tom = dias >= 7 ? 'critico' : dias >= 3 ? 'atencao' : 'neutro';
+
+  return { texto: `${prefixo} ${emDias(dias)}`, tom };
+}
 
 const STATUS_LABEL: Record<string, string> = {
   aberto: 'Aberto',
@@ -33,6 +69,8 @@ type Problema = {
   local: string;
   descricao: string;
   status: string;
+  criado_em: string;
+  historico_status: { status: string; criado_em: string }[];
 };
 
 export default function ProblemasScreen() {
@@ -53,14 +91,15 @@ export default function ProblemasScreen() {
   const carregar = useCallback(async () => {
     const { data, error } = await supabase
       .from('problemas')
-      .select('id, titulo, categoria, local, descricao, status')
+      .select('id, titulo, categoria, local, descricao, status, criado_em, historico_status(status, criado_em)')
+      .is('arquivado_em', null)
       .order('criado_em', { ascending: false });
 
     if (error) {
       Alert.alert('Erro ao carregar problemas', error.message);
       return;
     }
-    setLista(data ?? []);
+    setLista((data as unknown as Problema[]) ?? []);
   }, []);
 
   useEffect(() => {
@@ -151,12 +190,14 @@ export default function ProblemasScreen() {
         ListEmptyComponent={<Text style={styles.vazio}>Nenhum problema relatado ainda.</Text>}
         renderItem={({ item }) => {
           const cor = STATUS_COR[item.status] ?? STATUS_COR.aberto;
+          const sla = tempoEmAberto(item);
           return (
             <View style={styles.card}>
               <View style={styles.cardTop}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.titulo}>{item.titulo}</Text>
                   <Text style={styles.meta}>{item.categoria} · {item.local}</Text>
+                  <Text style={[styles.sla, { color: TOM_COR[sla.tom] }]}>{sla.texto}</Text>
                 </View>
                 <View style={[styles.status, { backgroundColor: cor.bg }]}>
                   <Text style={[styles.statusTexto, { color: cor.cor }]}>
@@ -187,6 +228,7 @@ const styles = StyleSheet.create({
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
   titulo: { fontWeight: '700', fontSize: 15, color: '#211F1B' },
   meta: { fontSize: 12, color: '#6B665D', marginTop: 2 },
+  sla: { fontSize: 11, fontWeight: '600', marginTop: 4 },
   status: { borderRadius: 20, paddingVertical: 3, paddingHorizontal: 9 },
   statusTexto: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase' },
   descricao: { fontSize: 13, color: '#6B665D', marginTop: 8, lineHeight: 19 },

@@ -29,6 +29,7 @@ varanda-app/
 ├── App.tsx                          — auth gate + tab navigator (mostra aba Gestão só se papel === 'sindico')
 ├── db/
 │   ├── varanda-schema.sql           — DDL completo, idempotente. FONTE DA VERDADE do banco.
+│   ├── migracao-arquivar-e-cancelar.sql — arquivar, cancelar reunião, unique (PENDENTE)
 │   └── snippets-teste.sql           — atalhos de SQL pro teste manual (não é migração)
 ├── lib/
 │   ├── supabase.ts                  — client Supabase configurado pra RN
@@ -77,6 +78,11 @@ insert into codigos_fundacao (codigo, observacao)
 values ('VARANDA-2026-ABC', 'Ed. Fulano — trial iniciado 20/08');
 ```
 
+**PENDENTE — `db/migracao-arquivar-e-cancelar.sql` ainda não foi rodado no Supabase** (20/08/2026):
+- `arquivado_em` em `sugestoes` e `problemas` — soft delete; nada é apagado. Não precisou de policy nova: as de update do síndico já cobrem.
+- `cancelada_em` e `motivo_cancelamento` em `reunioes`, mais a policy `sindico edita reuniao` (a tabela tinha select e insert, faltava update).
+- índice único `unidades_sem_duplicata` — fecha a dívida técnica da duplicata de unidade. É índice de expressão com `coalesce(bloco, '')` porque em unique constraint dois NULLs não conflitam, e sem isso "sem bloco / 101" entraria infinitas vezes. **Se já houver duplicata no banco, a criação do índice falha** — o arquivo traz a query pra conferir antes.
+
 **Decisão em aberto (item 4):** RLS é por linha, não por coluna. Liberar a linha de `usuarios` pro vizinho libera `telefone` e `foto_url` junto com `nome` — a UI mostrar só o nome não protege, quem chamar a API direto vê tudo. Isso conflita com o item de backlog "lista de condôminos visível só pro síndico (nome, unidade, papel, **contato**)". Se contato tiver que ser restrito, o caminho é mover telefone pra uma tabela separada com policy própria.
 
 ## Armadilhas já resolvidas (não repetir)
@@ -106,6 +112,7 @@ Corrigido nesta sessão:
 
 - **Comentários no Mural** (Fase 1 do roadmap): card expande, lista comentários, campo pra escrever, síndico remove comentário. Primeira vez que a tabela `comentarios` é usada.
 - Push notifications e analytics **adiados por decisão** de 20/08/2026 — ver Parte 4.
+- **Tempo em aberto nos Problemas, arquivar solicitações e cancelar reunião** — os três dependem de `db/migracao-arquivar-e-cancelar.sql`, que ainda não rodou. Sem ela as telas quebram no `arquivado_em`/`cancelada_em` inexistente.
 
 MVP funcionalmente completo e testado (antes desta sessão): cadastro → vínculo por código de convite → aprovação pelo síndico → Mural, Sugestões (com apoio), Problemas (com histórico de status), Oficial (avisos fixados, votação por unidade, reunião com RSVP e seletor de data/hora nativo) → Gestão do síndico pra tudo isso.
 
@@ -133,7 +140,7 @@ Vitor — dev de jogos mobile (Unity/C#), sem familiaridade prévia com Supabase
 
 ### Reuniões
 - [x] Permitir desmarcar presença — o código já fazia o `delete` desde sempre, mas faltava a policy no banco, então nunca removeu nada. Policy aplicada em 20/08/2026
-- [ ] Síndico poder cancelar reunião, com opção de já mandar um aviso junto avisando o cancelamento
+- [x] Síndico poder cancelar reunião, com opção de mandar aviso junto — cancelamento é **soft** (`cancelada_em`), porque quem confirmou presença precisa ver que foi cancelada; apagar faria a reunião sumir em silêncio
 
 ### Reserva de salão
 - [ ] Gestão e pedido de reserva do salão, com calendário já mostrando datas bloqueadas (não deixar pedir data já reservada)
@@ -142,8 +149,8 @@ Vitor — dev de jogos mobile (Unity/C#), sem familiaridade prévia com Supabase
 - [ ] Regras editáveis pelo síndico, com aviso automático disparado quando forem alteradas
 
 ### Gestão (síndico)
-- [ ] Arquivar sugestões/problemas (tirar da lista ativa sem apagar)
-- [ ] Ter acesso a itens arquivados
+- [x] Arquivar sugestões/problemas — filtro Ativas/Arquivadas na tela de moderação, com arquivar e desarquivar
+- [x] Ter acesso a itens arquivados — mesmo filtro
 - [ ] Lista de condôminos do condomínio, visível só pro síndico (nome, unidade, papel, contato) — ver decisão em aberto sobre `telefone` na Parte 1
 - Analytics → movido pra Parte 3, virou pré-requisito do modelo de negócio, não feature de Gestão
 
@@ -202,7 +209,7 @@ Não são recomendação de implementar tudo — são ideias pra avaliar quando 
 
 ### Novos itens de backlog gerados por essa pesquisa
 - [ ] Seção financeira / prestação de contas simplificada (balancete como aviso estruturado + anexo)
-- [ ] Indicador de tempo em aberto nos Problemas (SLA visual: "aberto há X dias")
+- [x] Indicador de tempo em aberto nos Problemas — conta da **última mudança de status**, não da abertura: é o "aberto há 5 dias sem atualização" que a pesquisa apontou. Âmbar a partir de 3 dias, vermelho a partir de 7; resolvido mostra em quanto tempo foi
 - [ ] Lembrete automático antes do prazo de uma votação encerrar
 - [ ] Anexar documento/pauta a uma votação
 - [ ] Relato confidencial (só síndico vê) como opção alternativa ao relato público em Problemas
@@ -314,17 +321,17 @@ MVP completo e em uso num condomínio real. Um condomínio novo entra sozinho, s
 | ~~Respostas em thread~~ DESCARTADO | Decisão de 20/08/2026: a estrutura plana já resolve. Comentário dentro de comentário não paga o custo numa conversa de prédio. |
 | ~~Moderação de comentário (síndico)~~ FEITO | Saiu junto dos comentários: link "remover" em cada comentário, visível só pro síndico. |
 | ~~Retirar apoio de sugestão~~ FEITO | O código já fazia o delete; faltava a policy, que veio no patch de 20/08. Só precisou de endurecimento contra falha silenciosa. |
-| "Aberto há X dias" nos Problemas | Poucas horas, e o morador vê que a coisa anda — ataca a reclamação nº1 da pesquisa (síndico que não responde). Dado já existe em `criado_em` + `historico_status`. |
+| ~~"Aberto há X dias" nos Problemas~~ FEITO | Conta da última mudança de status, não da abertura. Âmbar em 3 dias, vermelho em 7. |
 | Revisão de layout | Faz sentido junto: vamos mexer nessas telas de qualquer jeito. |
 
 ## Fase 2 — Dia a dia do síndico
 
 **Meta:** o síndico tocar o condomínio sem pedir socorro nem abrir o painel do Supabase.
 
-- Cancelar reunião, com aviso automático junto (hoje dá pra marcar e não dá pra desmarcar)
-- Arquivar sugestões/problemas + acesso ao arquivo (a lista ativa vira lixo em dois meses de uso real)
+- ~~Cancelar reunião, com aviso automático junto~~ **FEITO**
+- ~~Arquivar sugestões/problemas + acesso ao arquivo~~ **FEITO**
 - Lista de condôminos — bloqueada pela decisão sobre `telefone` na Parte 1
-- `unique (condominio_id, bloco, numero)` — dívida técnica: duplicata de unidade só é checada no client
+- ~~`unique (condominio_id, bloco, numero)`~~ **FEITO** (índice `unidades_sem_duplicata`, na migração pendente)
 
 ## Fase 3 — Gestão do condomínio
 

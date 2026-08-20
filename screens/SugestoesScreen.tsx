@@ -54,6 +54,7 @@ export default function SugestoesScreen() {
     const { data, error } = await supabase
       .from('sugestoes')
       .select('id, titulo, descricao, categoria, status, apoios(count)')
+      .is('arquivado_em', null)
       .order('criado_em', { ascending: false });
 
     if (error) {

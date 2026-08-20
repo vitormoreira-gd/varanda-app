@@ -5,7 +5,14 @@ import { useMeuCondominio } from '../lib/useMeuCondominio';
 
 type Aviso = { id: string; titulo: string; texto: string; fixado: boolean; criado_em: string };
 type Votacao = { id: string; titulo: string; descricao: string | null; opcoes: string[]; data_fim: string };
-type Reuniao = { id: string; titulo: string; data_hora: string; local: string | null; pauta: string | null };
+type Reuniao = {
+  id: string;
+  titulo: string;
+  data_hora: string;
+  local: string | null;
+  pauta: string | null;
+  cancelada_em: string | null;
+};
 
 export default function OficialScreen() {
   const { unidadeId, loading: carregandoVinculo, erro: erroVinculo } = useMeuCondominio();
@@ -51,7 +58,7 @@ export default function OficialScreen() {
 
     const { data: reunioesData, error: erroReunioes } = await supabase
       .from('reunioes')
-      .select('id, titulo, data_hora, local, pauta')
+      .select('id, titulo, data_hora, local, pauta, cancelada_em')
       .order('data_hora', { ascending: true });
     if (erroReunioes) Alert.alert('Erro ao carregar reuniões', erroReunioes.message);
     setReunioes(reunioesData ?? []);
@@ -192,22 +199,26 @@ export default function OficialScreen() {
       {reunioes.map((r) => {
         const confirmado = meusRsvps.has(r.id);
         const passada = new Date(r.data_hora) < new Date();
+        const cancelada = !!r.cancelada_em;
         return (
           <View key={r.id} style={styles.card}>
-            <Text style={styles.titulo}>{r.titulo}</Text>
+            {cancelada && <Text style={styles.tagCancelada}>reunião cancelada pelo síndico</Text>}
+            <Text style={[styles.titulo, cancelada && styles.textoRiscado]}>{r.titulo}</Text>
             <Text style={styles.meta}>
               {new Date(r.data_hora).toLocaleString('pt-BR')} {r.local ? `· ${r.local}` : ''}
               {passada ? ' · (já passou)' : ''}
             </Text>
             {r.pauta && <Text style={styles.texto}>{r.pauta}</Text>}
-            <Pressable
-              onPress={() => toggleRsvp(r.id)}
-              style={[styles.rsvpBtn, confirmado && styles.rsvpBtnAtivo]}
-            >
-              <Text style={[styles.rsvpTexto, confirmado && styles.rsvpTextoAtivo]}>
-                {confirmado ? 'Presença confirmada ✓' : 'Confirmar presença'}
-              </Text>
-            </Pressable>
+            {!cancelada && (
+              <Pressable
+                onPress={() => toggleRsvp(r.id)}
+                style={[styles.rsvpBtn, confirmado && styles.rsvpBtnAtivo]}
+              >
+                <Text style={[styles.rsvpTexto, confirmado && styles.rsvpTextoAtivo]}>
+                  {confirmado ? 'Presença confirmada ✓' : 'Confirmar presença'}
+                </Text>
+              </Pressable>
+            )}
           </View>
         );
       })}
@@ -223,6 +234,8 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#E4DFD2' },
   cardFixado: { borderLeftWidth: 4, borderLeftColor: '#C98A1F' },
   tagFixado: { fontSize: 10, color: '#C98A1F', textTransform: 'uppercase', fontWeight: '700', marginBottom: 4 },
+  tagCancelada: { fontSize: 10, color: '#B6512E', textTransform: 'uppercase', fontWeight: '700', marginBottom: 4 },
+  textoRiscado: { textDecorationLine: 'line-through', color: '#6B665D' },
   titulo: { fontWeight: '700', fontSize: 15, color: '#211F1B' },
   texto: { fontSize: 13, color: '#6B665D', marginTop: 6, lineHeight: 19 },
   meta: { fontSize: 12, color: '#6B665D', marginTop: 4 },
