@@ -1,18 +1,22 @@
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import VinculosPendentesScreen from './VinculosPendentesScreen';
+import UnidadesScreen from './UnidadesScreen';
 import ModerarScreen from './ModerarScreen';
 import OficialCriarScreen from './OficialCriarScreen';
 
 const ABAS = [
   { chave: 'vinculos', label: 'Vínculos' },
+  { chave: 'unidades', label: 'Unidades' },
   { chave: 'sugestoes', label: 'Sugestões' },
   { chave: 'problemas', label: 'Problemas' },
   { chave: 'oficial', label: 'Oficial' },
 ] as const;
 
 export default function GestaoScreen() {
-  const [aba, setAba] = useState<'vinculos' | 'sugestoes' | 'problemas' | 'oficial'>('vinculos');
+  const [aba, setAba] = useState<'vinculos' | 'unidades' | 'sugestoes' | 'problemas' | 'oficial'>(
+    'vinculos'
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F2EFE6' }}>
@@ -29,6 +33,7 @@ export default function GestaoScreen() {
       </View>
 
       {aba === 'vinculos' && <VinculosPendentesScreen />}
+      {aba === 'unidades' && <UnidadesScreen />}
       {aba === 'sugestoes' && <ModerarScreen tipo="sugestoes" />}
       {aba === 'problemas' && <ModerarScreen tipo="problemas" />}
       {aba === 'oficial' && <OficialCriarScreen />}

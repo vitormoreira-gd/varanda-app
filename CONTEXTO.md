@@ -29,19 +29,22 @@ varanda-app/
 ├── App.tsx                          — auth gate + tab navigator (mostra aba Gestão só se papel === 'sindico')
 ├── db/
 │   ├── varanda-schema.sql           — DDL completo, idempotente. FONTE DA VERDADE do banco.
+│   └── migracao-onboarding.sql      — códigos de fundação + RPC (PENDENTE de rodar no Supabase)
 ├── lib/
 │   ├── supabase.ts                  — client Supabase configurado pra RN
 │   ├── datas.ts                     — formatarDataHora(), sem depender de Intl
-│   └── useMeuCondominio.ts          — hook: retorna condominioId, unidadeId, papel do usuário logado
+│   └── useMeuCondominio.ts          — hook: situacao do onboarding + condominioId, unidadeId, papel
 ├── screens/
-│   ├── AuthScreen.tsx                — cadastro/login
+│   ├── AuthScreen.tsx                — cadastro/login (só e-mail e senha)
+│   ├── EntradaScreen.tsx             — onboarding: perfil → convite ou fundação → espera aprovação
 │   ├── MuralScreen.tsx               — feed social (posts)
 │   ├── SolicitacoesScreen.tsx        — host com seletor Sugestões/Problemas
 │   ├── SugestoesScreen.tsx
 │   ├── ProblemasScreen.tsx
 │   ├── OficialScreen.tsx             — visão condômino: avisos, votações (votar), reuniões (RSVP)
 │   ├── OficialCriarScreen.tsx        — visão síndico: criar aviso/votação/reunião (usado dentro de Gestão)
-│   ├── GestaoScreen.tsx              — host síndico: Vínculos/Sugestões/Problemas/Oficial
+│   ├── GestaoScreen.tsx              — host síndico: Vínculos/Unidades/Sugestões/Problemas/Oficial
+│   ├── UnidadesScreen.tsx            — síndico cadastra unidades em lote e compartilha convites
 │   ├── VinculosPendentesScreen.tsx   — síndico aprova vínculo pendente
 │   ├── ModerarScreen.tsx             — síndico muda status de sugestão/problema
 │   └── PerfilScreen.tsx
@@ -63,6 +66,17 @@ Quatro policies que faltavam foram descobertas ao ler o schema e **aplicadas no 
 3. `delete` em `apoios` — mesma coisa pra retirar apoio de sugestão.
 4. `select` em `usuarios` pra vizinhos do mesmo condomínio (via nova função `usuarios_do_meu_condominio()`) — antes cada usuário só enxergava o próprio perfil, então o embed `usuarios!autor_id(nome)` do Mural voltava null e todo post aparecia como "Vizinho".
 
+**PENDENTE — `db/migracao-onboarding.sql` ainda não foi rodado no Supabase.** Onboarding self-service (20/08/2026):
+- tabela `codigos_fundacao` — RLS ligado e **sem nenhuma policy**, de propósito: ninguém lê nem escreve pela API, o único caminho é o RPC. Impede alguém de listar códigos ainda não usados.
+- RPC `fundar_condominio(codigo, nome, endereco, bloco, numero)` — `security definer`, cria condomínio + unidade do síndico + vínculo já aprovado numa transação, e queima o código. Usa `for update` na linha do código pra dois cliques simultâneos não usarem o mesmo código.
+- policy `sindico cria unidade` em `unidades` — insert direto resolve, sem RPC, porque aqui o `condominio_id` já existe e `eh_sindico()` já funciona.
+
+**Como emitir um código de fundação** (no SQL Editor, quando fechar um trial):
+```sql
+insert into codigos_fundacao (codigo, observacao)
+values ('VARANDA-2026-ABC', 'Ed. Fulano — trial iniciado 20/08');
+```
+
 **Decisão em aberto (item 4):** RLS é por linha, não por coluna. Liberar a linha de `usuarios` pro vizinho libera `telefone` e `foto_url` junto com `nome` — a UI mostrar só o nome não protege, quem chamar a API direto vê tudo. Isso conflita com o item de backlog "lista de condôminos visível só pro síndico (nome, unidade, papel, **contato**)". Se contato tiver que ser restrito, o caminho é mover telefone pra uma tabela separada com policy própria.
 
 ## Armadilhas já resolvidas (não repetir)
@@ -71,8 +85,9 @@ Quatro policies que faltavam foram descobertas ao ler o schema e **aplicadas no 
 2. **RLS e enum ambíguo em função PL/pgSQL**: se uma função usa `returns table (coluna_x ...)`, o Postgres cria uma variável interna com esse nome que pode colidir com uma coluna de tabela de mesmo nome dentro do corpo da função. Nomear as colunas de retorno de forma única (ex: `id_unidade` em vez de `unidade_id`) evita.
 3. **Falha silenciosa é o inimigo nº1**: todo `supabase.from(...).select/insert/update` deve checar `error` e mostrar via `Alert.alert`. Vários bugs de "não fez nada" eram erro real sendo engolido sem feedback.
 4. **RLS que bloqueia `delete` não devolve erro** — devolve 0 linhas afetadas. Um `Alert.alert` em cima do `error` (armadilha nº3) não pega isso: o caminho é `.delete()...select()` e checar se a lista voltou vazia. Foi assim que "desmarcar presença" passou meses parecendo implementado. Vale o mesmo raciocínio pra `update` bloqueado.
-5. **PowerShell bloqueando `npx`**: usar `cmd` em vez de PowerShell, ou `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` como admin.
-6. **`.env` do Expo**: variáveis precisam do prefixo `EXPO_PUBLIC_` pra chegar no client. Mudança no `.env` só é lida reiniciando o servidor (`npx expo start -c`).
+5. **Select em `vinculos` devolve o condomínio inteiro pra síndico** — a policy "sindico ve vinculos do condominio" soma-se à de "vê os próprios". Então `from('vinculos').select(...)` sem `.eq('usuario_id', ...)` traz os vínculos de todos os moradores quando quem pergunta é síndico. Com `.maybeSingle()` isso vira erro de "mais de uma linha" no momento em que o segundo morador é aprovado — o app do síndico quebrava inteiro. Sempre filtrar por `usuario_id` quando a pergunta é "qual é o MEU vínculo".
+6. **PowerShell bloqueando `npx`**: usar `cmd` em vez de PowerShell, ou `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` como admin.
+7. **`.env` do Expo**: variáveis precisam do prefixo `EXPO_PUBLIC_` pra chegar no client. Mudança no `.env` só é lida reiniciando o servidor (`npx expo start -c`).
 
 ## Status atual
 
@@ -83,6 +98,9 @@ Corrigido nesta sessão:
 - Feed com data/hora, curtidas e moderação (ver backlog).
 - `delete` de RSVP agora detecta bloqueio de RLS em vez de falhar calado.
 - Quatro policies que faltavam no banco, aplicadas e dobradas no schema (ver Parte 1).
+
+- **Onboarding self-service** construído (ver backlog). Ao escrever, descobri que o fluxo de entrada não existia: `vincular_por_codigo` não era chamada em lugar nenhum do app, e nada criava a linha em `usuarios` — os perfis existentes devem ter sido inseridos à mão no painel. O CONTEXTO dizia que esse fluxo tinha sido testado; não tinha.
+- **Bug latente grave corrigido no hook**: `.maybeSingle()` em `vinculos` sem filtro de `usuario_id` (ver armadilha nº5). O app do síndico ia quebrar assim que o segundo morador fosse aprovado.
 
 Aberto: `apoios` agora aceita `delete`, mas nenhuma tela usa — retirar apoio de uma sugestão continua sem botão em `SugestoesScreen`.
 
@@ -122,7 +140,7 @@ Vitor — dev de jogos mobile (Unity/C#), sem familiaridade prévia com Supabase
 - [ ] Lista de condôminos do condomínio, visível só pro síndico (nome, unidade, papel, contato) — ver decisão em aberto sobre `telefone` na Parte 1
 - Analytics → movido pra Parte 3, virou pré-requisito do modelo de negócio, não feature de Gestão
 
-### Onboarding self-service — PRÓXIMO ITEM
+### Onboarding self-service — FEITO (falta rodar a migração)
 
 Levantado em 20/08/2026. Não existia no backlog antes; é o gargalo real entre "app do meu prédio" e "produto".
 
@@ -130,9 +148,13 @@ Hoje criar um condomínio novo exige entrar no painel do Supabase e inserir linh
 
 O nó técnico: o primeiro síndico é um paradoxo igual ao do `vincular_por_codigo` — `eh_sindico()` exige um vínculo aprovado que ainda não existe, e não pode ser o próprio usuário que se declara síndico (senão qualquer um vira síndico de qualquer condomínio). Provavelmente resolve com RPC `security definer` + algum código/convite emitido fora do app.
 
-- [ ] Criar condomínio + primeiro síndico (fluxo e quem tem permissão de disparar)
-- [ ] Cadastro de unidades em lote (bloco/número em massa, não uma a uma)
-- [ ] Distribuição dos códigos de convite pros moradores (hoje o `codigo_convite` é gerado mas não tem como o síndico ver ou compartilhar)
+**Decisão tomada (20/08/2026):** código de fundação emitido por você fora do app. Descartadas: autoatendimento total (qualquer um vira síndico de qualquer prédio) e fila de aprovação manual (trava o onboarding no pico de interesse do síndico). O código casa com o ciclo de venda com toque humano do plano e vira o gate natural do trial.
+
+- [x] Criar condomínio + primeiro síndico — RPC `fundar_condominio`, aba "Vou fundar" na EntradaScreen
+- [x] Cadastro de unidades em lote — `UnidadesScreen`, aceita intervalo (`101-110`), lista (`11, 12, 21`) e mistura; ignora as que já existem
+- [x] Distribuição dos códigos de convite — lista de unidades com código e botão de compartilhar (Share nativo), mostrando quantos moradores já entraram em cada uma
+- [x] Perfil e vínculo por convite — a `EntradaScreen` cria a linha em `usuarios` e chama `vincular_por_codigo`, que existia no banco mas nenhuma tela usava
+- [ ] Sem unique em `(condominio_id, bloco, numero)`: a checagem de duplicata é só no client. Dois síndicos do mesmo prédio criando unidades ao mesmo tempo duplicam
 
 ### Vagas de garagem
 - [ ] Solicitação de troca de vaga entre condôminos (pedir, aceitar/recusar, histórico de trocas)

@@ -5,9 +5,9 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
 import AuthScreen from './screens/AuthScreen';
+import EntradaScreen from './screens/EntradaScreen';
 import MuralScreen from './screens/MuralScreen';
 import PerfilScreen from './screens/PerfilScreen';
-import EmBreveScreen from './screens/EmBreveScreen';
 import OficialScreen from './screens/OficialScreen';
 import SolicitacoesScreen from './screens/SolicitacoesScreen';
 import GestaoScreen from './screens/GestaoScreen';
@@ -44,7 +44,21 @@ export default function App() {
 }
 
 function AppLogado({ session }: { session: Session }) {
-  const { papel } = useMeuCondominio();
+  const { situacao, papel, loading, recarregar } = useMeuCondominio();
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <Text>Carregando...</Text>
+      </View>
+    );
+  }
+
+  // Sem vínculo aprovado o app não tem o que mostrar: nenhuma tela funciona
+  // sem condominio_id. Manda pro onboarding em vez de abrir abas quebradas.
+  if (situacao !== 'aprovado') {
+    return <EntradaScreen situacao={situacao} aoConcluir={recarregar} />;
+  }
 
   return (
     <NavigationContainer>
