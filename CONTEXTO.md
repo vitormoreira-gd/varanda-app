@@ -4,6 +4,49 @@ Este arquivo existe pra dar contexto rápido a qualquer instância do Claude (ou
 
 ---
 
+# Onde retomar
+
+*Última sessão: 20/08/2026. Bloco escrito no fim da sessão pra próxima instância (ou pro Vitor) não precisar reconstruir estado.*
+
+## Estado
+
+- **Tudo commitado**, working tree limpo, branch `main`, sem remote (só local).
+- **Todas as migrações aplicadas no Supabase e dobradas** dentro de `db/varanda-schema.sql`. Não há migração solta pendente. O `db/` tem só o schema e os snippets de teste.
+- App rodando no celular via Expo Go. Nenhum emulador na máquina, e foi decidido continuar assim.
+
+## O que ainda NÃO foi testado no celular
+
+Escrito e com `npx tsc --noEmit` limpo, mas não exercitado com gente de verdade:
+
+1. **Reserva do salão** — o fluxo completo: morador pede, síndico aprova, e um segundo pedido pra mesma data tem que cair na mensagem "Data indisponível" (vinda do erro 23505 dos índices parciais).
+2. **Arquivar sugestão/problema**, **cancelar reunião com aviso**, e o badge de **"aberto há X dias"** — implementados e com a migração aplicada, mas sem teste de tela.
+3. **Lista de condôminos** — conferir se o resumo do topo bate com a realidade do Aurora.
+
+## Próximo passo
+
+Sobrou da **Fase 3** (ver Parte 4): regras do condomínio · relato confidencial em Problemas · subsíndico e conselho fiscal · troca de vaga de garagem.
+
+Não escolher sozinho: o Vitor quer ser consultado antes de começar uma implementação, com as opções e o custo de cada uma. Depois de escolhido, tocar até o fim sem perguntar de novo.
+
+## Como subir o ambiente
+
+```
+npx expo start
+```
+
+No Expo Go, "Enter URL manually" → `exp://<ip-da-maquina>:8081`. O celular fica no Wi-Fi e o PC no cabo, mesma rede.
+
+**Pegadinha que já custou tempo:** se o Metro não registrar nenhuma requisição do celular, é o firewall do Windows. A rede precisa estar como **Private** e a porta 8081 liberada — em PowerShell como administrador:
+
+```powershell
+Set-NetConnectionProfile -InterfaceAlias Ethernet -NetworkCategory Private
+New-NetFirewallRule -DisplayName "Expo Metro 8081" -Direction Inbound -Protocol TCP -LocalPort 8081 -Action Allow -Profile Private
+```
+
+Pra testar com duas contas sem ficar entrando e saindo, `db/snippets-teste.sql` tem os atalhos: aprovar vínculo, emitir e reciclar código de fundação, promover a síndico.
+
+---
+
 # Parte 1 — Contexto técnico
 
 ## O que é
@@ -29,7 +72,6 @@ varanda-app/
 ├── App.tsx                          — auth gate + tab navigator (mostra aba Gestão só se papel === 'sindico')
 ├── db/
 │   ├── varanda-schema.sql           — DDL completo, idempotente. FONTE DA VERDADE do banco.
-│   ├── migracao-reservas.sql        — reserva do salão (PENDENTE de rodar no Supabase)
 │   └── snippets-teste.sql           — atalhos de SQL pro teste manual (não é migração)
 ├── lib/
 │   ├── supabase.ts                  — client Supabase configurado pra RN
@@ -85,7 +127,7 @@ Arquivamento, cancelamento de reunião e unique de unidade, **aplicados no Supab
 - `cancelada_em` e `motivo_cancelamento` em `reunioes`, mais a policy `sindico edita reuniao` (a tabela tinha select e insert, faltava update).
 - índice único `unidades_sem_duplicata` — fecha a dívida técnica da duplicata de unidade. É índice de expressão com `coalesce(bloco, '')` porque em unique constraint dois NULLs não conflitam, e sem isso "sem bloco / 101" entraria infinitas vezes. Se um banco novo já tiver duplicata, a criação do índice falha — nesse caso, limpar antes de rodar o schema.
 
-**PENDENTE — `db/migracao-reservas.sql` ainda não foi rodado no Supabase** (20/08/2026):
+Reserva do salão, **aplicada no Supabase em 20/08/2026** e já dobrada dentro de `varanda-schema.sql`:
 - enum `status_reserva` (pendente/aprovada/recusada) e tabela `reservas`.
 - Reserva é **por unidade**, não por pessoa — mesma lógica do voto. O insert repete a checagem de unidade usada em `votos`: não basta `usuario_id = auth.uid()`, a unidade tem que ser mesmo do usuário, senão dá pra reservar em nome do vizinho.
 - Dois **índices parciais** garantem a regra de conflito no banco, não na tela: `reservas_uma_aprovada_por_data` (só uma aprovada por data e condomínio) e `reservas_um_pedido_por_unidade_data`. Parciais de propósito — vários pedidos *pendentes* na mesma data podem coexistir, e é justamente isso que dá ao síndico a escolha entre dois pedidos.
@@ -123,7 +165,7 @@ Corrigido nesta sessão:
 
 - **Comentários no Mural** (Fase 1 do roadmap): card expande, lista comentários, campo pra escrever, síndico remove comentário. Primeira vez que a tabela `comentarios` é usada.
 - Push notifications e analytics **adiados por decisão** de 20/08/2026 — ver Parte 4.
-- **Reserva do salão** (primeiro item da Fase 3): pedido por unidade, aprovação do síndico na mesma tela, conflito de data resolvido no banco por índice parcial. **Depende de `db/migracao-reservas.sql` rodar.**
+- **Reserva do salão** (primeiro item da Fase 3): pedido por unidade, aprovação do síndico na mesma tela, conflito de data resolvido no banco por índice parcial.
 - **Lista de condôminos** (fecha a Fase 2 do roadmap): quem entrou, unidade por unidade, com resumo de adesão no topo — % de unidades ocupadas é o embrião da métrica que o trial vai precisar.
 - **Tempo em aberto nos Problemas, arquivar solicitações e cancelar reunião** — migração aplicada e dobrada no schema.
 
@@ -133,7 +175,7 @@ MVP funcionalmente completo e testado (antes desta sessão): cadastro → víncu
 
 ## Preferências do dono do projeto
 
-Vitor — dev de jogos mobile (Unity/C#), sem familiaridade prévia com Supabase/React Native/backend web antes deste projeto, mas aprendeu rápido ao longo da conversa e já pode ser tratado com mais autonomia técnica do que no início. Prefere diagnóstico direto e código corrigido exato em vez de explicação longa. Comunicação em português; nomes de variáveis, tabelas e commits em português também, seguindo o padrão já usado no schema e no código.
+Vitor — dev de jogos mobile (Unity/C#), sem familiaridade prévia com Supabase/React Native/backend web antes deste projeto, mas aprendeu rápido ao longo da conversa e já pode ser tratado com mais autonomia técnica do que no início. Prefere diagnóstico direto e código corrigido exato em vez de explicação longa. **Quer ser consultado antes de começar uma implementação** — apresentar as opções com o custo de cada uma e esperar a escolha, em vez de sair codando o que parecer melhor. Depois de escolhido, tocar até o fim sem perguntar de novo. Comunicação em português; nomes de variáveis, tabelas e commits em português também, seguindo o padrão já usado no schema e no código.
 
 ---
 
@@ -352,7 +394,7 @@ MVP completo e em uso num condomínio real. Um condomínio novo entra sozinho, s
 
 **Meta:** fazer o que o WhatsApp não faz. É o que justifica cobrar, quando chegar a hora de cobrar.
 
-- ~~Reserva de salão~~ **FEITO** — falta só a migração rodar
+- ~~Reserva de salão~~ **FEITO**
 - Regras do condomínio editáveis, com aviso automático quando mudarem
 - Subsíndico e conselho fiscal (permissões intermediárias)
 - Troca de vaga de garagem entre condôminos
