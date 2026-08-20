@@ -11,8 +11,7 @@ Este arquivo existe pra dar contexto rápido a qualquer instância do Claude (ou
 ## Estado
 
 - **Tudo commitado**, working tree limpo, branch `main`, sem remote (só local).
-- **Há uma migração pendente de aplicar:** `db/migracao-regras.sql` (Regras do condomínio). Rodar no SQL Editor do Supabase antes de abrir o app, senão a aba Regras da Gestão quebra. Já está dobrada dentro de `db/varanda-schema.sql` — depois de aplicada, apagar o arquivo de migração.
-- As demais migrações estão todas aplicadas e dobradas no schema.
+- **Todas as migrações aplicadas no Supabase e dobradas** dentro de `db/varanda-schema.sql`. Não há migração solta pendente. O `db/` tem só o schema e os snippets de teste.
 - App rodando no celular via Expo Go. Nenhum emulador na máquina, e foi decidido continuar assim.
 
 ## O que ainda NÃO foi testado no celular
@@ -22,7 +21,6 @@ Escrito e com `npx tsc --noEmit` limpo, mas não exercitado com gente de verdade
 1. **Reserva do salão** — o fluxo completo: morador pede, síndico aprova, e um segundo pedido pra mesma data tem que cair na mensagem "Data indisponível" (vinda do erro 23505 dos índices parciais).
 2. **Arquivar sugestão/problema**, **cancelar reunião com aviso**, e o badge de **"aberto há X dias"** — implementados e com a migração aplicada, mas sem teste de tela.
 3. **Lista de condôminos** — conferir se o resumo do topo bate com a realidade do Aurora.
-4. **Regras do condomínio** — publicar a primeira versão em Gestão › Regras, conferir se o aviso aparece fixado no Oficial de todo mundo, editar de novo e ver a versão subir pra 2. Salvar sem mudar o texto tem que dizer "Nada mudou" e **não** publicar aviso.
 
 ## Próximo passo
 
@@ -76,7 +74,6 @@ varanda-app/
 ├── App.tsx                          — auth gate + tab navigator (mostra aba Gestão só se papel === 'sindico')
 ├── db/
 │   ├── varanda-schema.sql           — DDL completo, idempotente. FONTE DA VERDADE do banco.
-│   ├── migracao-regras.sql          — PENDENTE de rodar no Supabase; apagar depois de aplicada
 │   └── snippets-teste.sql           — atalhos de SQL pro teste manual (não é migração)
 ├── lib/
 │   ├── supabase.ts                  — client Supabase configurado pra RN
@@ -140,7 +137,7 @@ Reserva do salão, **aplicada no Supabase em 20/08/2026** e já dobrada dentro d
 - Dois **índices parciais** garantem a regra de conflito no banco, não na tela: `reservas_uma_aprovada_por_data` (só uma aprovada por data e condomínio) e `reservas_um_pedido_por_unidade_data`. Parciais de propósito — vários pedidos *pendentes* na mesma data podem coexistir, e é justamente isso que dá ao síndico a escolha entre dois pedidos.
 - Um salão por condomínio. Se um dia houver várias áreas comuns, vira tabela `areas_comuns` + FK; hoje seria complexidade sem demanda.
 
-Regras do condomínio, **migração `db/migracao-regras.sql` pendente de aplicar** e já dobrada dentro de `varanda-schema.sql`:
+Regras do condomínio, **aplicada no Supabase em 20/08/2026** e já dobrada dentro de `varanda-schema.sql`:
 - tabela `regras` — uma linha por condomínio, com `condominio_id` como **primary key**: o regimento é um só, e a PK já garante isso sem constraint extra.
 - **Só existe policy de select.** Escrever é sempre pelo RPC `salvar_regras`, que grava e publica o aviso na mesma transação. Sem policy de insert/update, não há caminho no app que mude as regras sem o condomínio ficar sabendo — a exigência "aviso automático quando forem alteradas" virou invariante de banco em vez de disciplina de tela.
 - Sem tabela de histórico de versões, de propósito: o rastro de cada alteração é o próprio aviso publicado, que já fica no Oficial. `versao` é um contador pro aviso citar.
@@ -181,7 +178,7 @@ Corrigido nesta sessão:
 - **Reserva do salão** (primeiro item da Fase 3): pedido por unidade, aprovação do síndico na mesma tela, conflito de data resolvido no banco por índice parcial.
 - **Lista de condôminos** (fecha a Fase 2 do roadmap): quem entrou, unidade por unidade, com resumo de adesão no topo — % de unidades ocupadas é o embrião da métrica que o trial vai precisar.
 - **Tempo em aberto nos Problemas, arquivar solicitações e cancelar reunião** — migração aplicada e dobrada no schema.
-- **Regras do condomínio** (Fase 3): leitura no topo do Oficial (card que expande, com versão e quem atualizou), edição em Gestão › Regras, e o aviso automático garantido pelo RPC. **Migração ainda não aplicada no Supabase.**
+- **Regras do condomínio** (Fase 3): leitura no topo do Oficial (card que expande, com versão e quem atualizou), edição em Gestão › Regras, e o aviso automático garantido pelo RPC. Migração aplicada e exercitada no celular ainda nesta sessão.
 
 Ambiente: decidido em 20/08/2026 continuar testando **só no celular**. Não há SDK Android na máquina (os quatro Unity instalados estão sem o módulo AndroidPlayer), e emulador custaria ~10 GB. Expo Web foi descartado porque `react-native-web` não implementa `Alert`, e este app usa `Alert.alert` para todo feedback de erro e toda confirmação destrutiva — testar lá esconderia justamente a classe de bug mais comum aqui. O emulador só passa a valer quando a dor for testar síndico e morador lado a lado.
 
