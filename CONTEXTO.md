@@ -322,7 +322,7 @@ MVP completo e em uso num condomínio real. Um condomínio novo entra sozinho, s
 | ~~Moderação de comentário (síndico)~~ FEITO | Saiu junto dos comentários: link "remover" em cada comentário, visível só pro síndico. |
 | ~~Retirar apoio de sugestão~~ FEITO | O código já fazia o delete; faltava a policy, que veio no patch de 20/08. Só precisou de endurecimento contra falha silenciosa. |
 | ~~"Aberto há X dias" nos Problemas~~ FEITO | Conta da última mudança de status, não da abertura. Âmbar em 3 dias, vermelho em 7. |
-| Revisão de layout | Faz sentido junto: vamos mexer nessas telas de qualquer jeito. |
+| Revisão de layout | **Adiado por decisão de 20/08/2026 para o fim do roadmap** — fazer a passada visual depois que as telas pararem de mudar, senão retrabalho. |
 
 ## Fase 2 — Dia a dia do síndico
 
