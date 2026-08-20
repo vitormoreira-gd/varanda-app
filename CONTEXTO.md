@@ -29,6 +29,7 @@ varanda-app/
 ├── App.tsx                          — auth gate + tab navigator (mostra aba Gestão só se papel === 'sindico')
 ├── db/
 │   ├── varanda-schema.sql           — DDL completo, idempotente. FONTE DA VERDADE do banco.
+│   ├── migracao-reservas.sql        — reserva do salão (PENDENTE de rodar no Supabase)
 │   └── snippets-teste.sql           — atalhos de SQL pro teste manual (não é migração)
 ├── lib/
 │   ├── supabase.ts                  — client Supabase configurado pra RN
@@ -38,7 +39,8 @@ varanda-app/
 │   ├── AuthScreen.tsx                — cadastro/login (só e-mail e senha)
 │   ├── EntradaScreen.tsx             — onboarding: perfil → convite ou fundação → espera aprovação
 │   ├── MuralScreen.tsx               — feed social (posts)
-│   ├── SolicitacoesScreen.tsx        — host com seletor Sugestões/Problemas
+│   ├── SolicitacoesScreen.tsx        — host com seletor Sugestões/Problemas/Salão
+│   ├── ReservasScreen.tsx            — pedir reserva do salão; síndico aprova/recusa na mesma tela
 │   ├── SugestoesScreen.tsx
 │   ├── ProblemasScreen.tsx
 │   ├── OficialScreen.tsx             — visão condômino: avisos, votações (votar), reuniões (RSVP)
@@ -83,6 +85,12 @@ Arquivamento, cancelamento de reunião e unique de unidade, **aplicados no Supab
 - `cancelada_em` e `motivo_cancelamento` em `reunioes`, mais a policy `sindico edita reuniao` (a tabela tinha select e insert, faltava update).
 - índice único `unidades_sem_duplicata` — fecha a dívida técnica da duplicata de unidade. É índice de expressão com `coalesce(bloco, '')` porque em unique constraint dois NULLs não conflitam, e sem isso "sem bloco / 101" entraria infinitas vezes. Se um banco novo já tiver duplicata, a criação do índice falha — nesse caso, limpar antes de rodar o schema.
 
+**PENDENTE — `db/migracao-reservas.sql` ainda não foi rodado no Supabase** (20/08/2026):
+- enum `status_reserva` (pendente/aprovada/recusada) e tabela `reservas`.
+- Reserva é **por unidade**, não por pessoa — mesma lógica do voto. O insert repete a checagem de unidade usada em `votos`: não basta `usuario_id = auth.uid()`, a unidade tem que ser mesmo do usuário, senão dá pra reservar em nome do vizinho.
+- Dois **índices parciais** garantem a regra de conflito no banco, não na tela: `reservas_uma_aprovada_por_data` (só uma aprovada por data e condomínio) e `reservas_um_pedido_por_unidade_data`. Parciais de propósito — vários pedidos *pendentes* na mesma data podem coexistir, e é justamente isso que dá ao síndico a escolha entre dois pedidos.
+- Um salão por condomínio. Se um dia houver várias áreas comuns, vira tabela `areas_comuns` + FK; hoje seria complexidade sem demanda.
+
 **Sobre `telefone` e `foto_url` (era decisão em aberto, resolvida em 20/08/2026):** RLS é por linha, não por coluna, então a policy que deixa o vizinho ver seu `nome` libera a linha inteira de `usuarios` — telefone e foto junto. Mas ao implementar a lista de condôminos ficou claro que **nenhuma tela do app lê ou escreve essas duas colunas**: são colunas mortas desde o schema original, e não há telefone nenhum no banco pra vazar. A exposição é teórica.
 
 Fica registrado pra quando deixar de ser: **no dia em que existir cadastro de telefone, mover contato pra tabela separada com policy própria** — a lista de condôminos já está preparada, ela não exibe contato hoje.
@@ -95,7 +103,8 @@ Fica registrado pra quando deixar de ser: **no dia em que existir cadastro de te
 4. **RLS que bloqueia `delete` não devolve erro** — devolve 0 linhas afetadas. Um `Alert.alert` em cima do `error` (armadilha nº3) não pega isso: o caminho é `.delete()...select()` e checar se a lista voltou vazia. Foi assim que "desmarcar presença" passou meses parecendo implementado. Vale o mesmo raciocínio pra `update` bloqueado.
 5. **Select em `vinculos` devolve o condomínio inteiro pra síndico** — a policy "sindico ve vinculos do condominio" soma-se à de "vê os próprios". Então `from('vinculos').select(...)` sem `.eq('usuario_id', ...)` traz os vínculos de todos os moradores quando quem pergunta é síndico. Com `.maybeSingle()` isso vira erro de "mais de uma linha" no momento em que o segundo morador é aprovado — o app do síndico quebrava inteiro. Sempre filtrar por `usuario_id` quando a pergunta é "qual é o MEU vínculo".
 6. **PowerShell bloqueando `npx`**: usar `cmd` em vez de PowerShell, ou `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` como admin.
-7. **`.env` do Expo**: variáveis precisam do prefixo `EXPO_PUBLIC_` pra chegar no client. Mudança no `.env` só é lida reiniciando o servidor (`npx expo start -c`).
+7. **`toISOString()` em coluna `date`**: converte pra UTC, então à noite no Brasil (UTC-3) a data pula pro dia seguinte — uma reserva pedida dia 20 às 22h viraria dia 21. Usar `paraDataISO()` de `lib/datas.ts`, que monta `YYYY-MM-DD` a partir dos componentes locais. Mesmo cuidado ao ler: `formatarDataCurta()` não passa por `Date` com fuso.
+8. **`.env` do Expo**: variáveis precisam do prefixo `EXPO_PUBLIC_` pra chegar no client. Mudança no `.env` só é lida reiniciando o servidor (`npx expo start -c`).
 
 ## Status atual
 
@@ -114,6 +123,7 @@ Corrigido nesta sessão:
 
 - **Comentários no Mural** (Fase 1 do roadmap): card expande, lista comentários, campo pra escrever, síndico remove comentário. Primeira vez que a tabela `comentarios` é usada.
 - Push notifications e analytics **adiados por decisão** de 20/08/2026 — ver Parte 4.
+- **Reserva do salão** (primeiro item da Fase 3): pedido por unidade, aprovação do síndico na mesma tela, conflito de data resolvido no banco por índice parcial. **Depende de `db/migracao-reservas.sql` rodar.**
 - **Lista de condôminos** (fecha a Fase 2 do roadmap): quem entrou, unidade por unidade, com resumo de adesão no topo — % de unidades ocupadas é o embrião da métrica que o trial vai precisar.
 - **Tempo em aberto nos Problemas, arquivar solicitações e cancelar reunião** — migração aplicada e dobrada no schema.
 
@@ -148,7 +158,7 @@ Vitor — dev de jogos mobile (Unity/C#), sem familiaridade prévia com Supabase
 - [x] Síndico poder cancelar reunião, com opção de mandar aviso junto — cancelamento é **soft** (`cancelada_em`), porque quem confirmou presença precisa ver que foi cancelada; apagar faria a reunião sumir em silêncio
 
 ### Reserva de salão
-- [ ] Gestão e pedido de reserva do salão, com calendário já mostrando datas bloqueadas (não deixar pedir data já reservada)
+- [x] Gestão e pedido de reserva do salão — aba "Salão" dentro de Solicitações. O bloqueio de data conflitante é garantido por índice parcial no banco, e o app traduz o erro 23505 numa mensagem que o morador entende. Síndico aprova/recusa na mesma tela, sem aba própria em Gestão
 
 ### Regras do condomínio
 - [ ] Regras editáveis pelo síndico, com aviso automático disparado quando forem alteradas
@@ -342,7 +352,7 @@ MVP completo e em uso num condomínio real. Um condomínio novo entra sozinho, s
 
 **Meta:** fazer o que o WhatsApp não faz. É o que justifica cobrar, quando chegar a hora de cobrar.
 
-- Reserva de salão com calendário de datas bloqueadas
+- ~~Reserva de salão~~ **FEITO** — falta só a migração rodar
 - Regras do condomínio editáveis, com aviso automático quando mudarem
 - Subsíndico e conselho fiscal (permissões intermediárias)
 - Troca de vaga de garagem entre condôminos

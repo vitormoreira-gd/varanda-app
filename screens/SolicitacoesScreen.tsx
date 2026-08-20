@@ -2,28 +2,36 @@ import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import SugestoesScreen from './SugestoesScreen';
 import ProblemasScreen from './ProblemasScreen';
+import ReservasScreen from './ReservasScreen';
+
+const ABAS = [
+  { chave: 'sugestoes', label: 'Sugestões' },
+  { chave: 'problemas', label: 'Problemas' },
+  { chave: 'reservas', label: 'Salão' },
+] as const;
+
+type Aba = (typeof ABAS)[number]['chave'];
 
 export default function SolicitacoesScreen() {
-  const [aba, setAba] = useState<'sugestoes' | 'problemas'>('sugestoes');
+  const [aba, setAba] = useState<Aba>('sugestoes');
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F2EFE6' }}>
       <View style={styles.seletor}>
-        <Pressable
-          style={[styles.opcao, aba === 'sugestoes' && styles.opcaoAtiva]}
-          onPress={() => setAba('sugestoes')}
-        >
-          <Text style={[styles.texto, aba === 'sugestoes' && styles.textoAtivo]}>Sugestões</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.opcao, aba === 'problemas' && styles.opcaoAtiva]}
-          onPress={() => setAba('problemas')}
-        >
-          <Text style={[styles.texto, aba === 'problemas' && styles.textoAtivo]}>Problemas</Text>
-        </Pressable>
+        {ABAS.map((a) => (
+          <Pressable
+            key={a.chave}
+            style={[styles.opcao, aba === a.chave && styles.opcaoAtiva]}
+            onPress={() => setAba(a.chave)}
+          >
+            <Text style={[styles.texto, aba === a.chave && styles.textoAtivo]}>{a.label}</Text>
+          </Pressable>
+        ))}
       </View>
 
-      {aba === 'sugestoes' ? <SugestoesScreen /> : <ProblemasScreen />}
+      {aba === 'sugestoes' && <SugestoesScreen />}
+      {aba === 'problemas' && <ProblemasScreen />}
+      {aba === 'reservas' && <ReservasScreen />}
     </View>
   );
 }
@@ -36,6 +44,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E4DFD2',
     borderRadius: 12,
     padding: 3,
+    gap: 3,
   },
   opcao: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center' },
   opcaoAtiva: { backgroundColor: '#fff' },

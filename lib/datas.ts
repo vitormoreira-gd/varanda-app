@@ -2,6 +2,24 @@
 
 const DOIS = (n: number) => String(n).padStart(2, '0');
 
+/**
+ * Data no formato que a coluna `date` do Postgres espera (YYYY-MM-DD).
+ * Montada a partir dos componentes locais de propósito: `toISOString()`
+ * converte pra UTC e, à noite no Brasil, joga a data pro dia seguinte.
+ */
+export function paraDataISO(d: Date): string {
+  return `${d.getFullYear()}-${DOIS(d.getMonth() + 1)}-${DOIS(d.getDate())}`;
+}
+
+/** Formata "2026-09-20" (coluna date) como "sáb, 20/09". Sem fuso no meio. */
+export function formatarDataCurta(dataISO: string): string {
+  const [ano, mes, dia] = dataISO.split('-').map(Number);
+  if (!ano || !mes || !dia) return dataISO;
+  const d = new Date(ano, mes - 1, dia);
+  const semana = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][d.getDay()];
+  return `${semana}, ${DOIS(dia)}/${DOIS(mes)}`;
+}
+
 /** Dias inteiros entre uma data ISO e agora. Negativo vira 0. */
 export function diasDesde(iso: string, agora: Date = new Date()): number {
   const d = new Date(iso);
