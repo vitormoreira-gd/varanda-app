@@ -29,7 +29,7 @@ varanda-app/
 ├── App.tsx                          — auth gate + tab navigator (mostra aba Gestão só se papel === 'sindico')
 ├── db/
 │   ├── varanda-schema.sql           — DDL completo, idempotente. FONTE DA VERDADE do banco.
-│   └── migracao-onboarding.sql      — códigos de fundação + RPC (PENDENTE de rodar no Supabase)
+│   └── snippets-teste.sql           — atalhos de SQL pro teste manual (não é migração)
 ├── lib/
 │   ├── supabase.ts                  — client Supabase configurado pra RN
 │   ├── datas.ts                     — formatarDataHora(), sem depender de Intl
@@ -66,7 +66,7 @@ Quatro policies que faltavam foram descobertas ao ler o schema e **aplicadas no 
 3. `delete` em `apoios` — mesma coisa pra retirar apoio de sugestão.
 4. `select` em `usuarios` pra vizinhos do mesmo condomínio (via nova função `usuarios_do_meu_condominio()`) — antes cada usuário só enxergava o próprio perfil, então o embed `usuarios!autor_id(nome)` do Mural voltava null e todo post aparecia como "Vizinho".
 
-**PENDENTE — `db/migracao-onboarding.sql` ainda não foi rodado no Supabase.** Onboarding self-service (20/08/2026):
+Onboarding self-service, **aplicado no Supabase em 20/08/2026** e já dobrado dentro de `varanda-schema.sql`:
 - tabela `codigos_fundacao` — RLS ligado e **sem nenhuma policy**, de propósito: ninguém lê nem escreve pela API, o único caminho é o RPC. Impede alguém de listar códigos ainda não usados.
 - RPC `fundar_condominio(codigo, nome, endereco, bloco, numero)` — `security definer`, cria condomínio + unidade do síndico + vínculo já aprovado numa transação, e queima o código. Usa `for update` na linha do código pra dois cliques simultâneos não usarem o mesmo código.
 - policy `sindico cria unidade` em `unidades` — insert direto resolve, sem RPC, porque aqui o `condominio_id` já existe e `eh_sindico()` já funciona.
@@ -91,7 +91,9 @@ values ('VARANDA-2026-ABC', 'Ed. Fulano — trial iniciado 20/08');
 
 ## Status atual
 
-*Sessão de 20/08/2026 — nada foi testado em device nesta sessão, só `npx tsc --noEmit` limpo. Nada commitado ainda: `lib/`, `screens/`, `db/` e este arquivo seguem untracked sobre o "Initial commit".*
+*Sessão de 20/08/2026 — tudo commitado, migrações aplicadas, e o app rodando no celular via Expo Go. O fluxo de onboarding foi exercitado ponta a ponta pela primeira vez.*
+
+Nota de ambiente: o Expo Go só conecta se a rede do PC estiver como **Private** no Windows e houver regra de firewall liberando a porta 8081 — sem isso o Metro não registra nem a tentativa. Aconteceu nesta sessão e custou tempo.
 
 Corrigido nesta sessão:
 - **Votação estava quebrada** — `useMeuCondominio` nunca retornou `unidadeId` (o `OficialScreen` destruturava e recebia `undefined`), então nenhum voto passava e o histórico "já votei" nunca carregava. Contradizia o "MVP completo e testado" abaixo; provavelmente quebrou num refactor posterior ao teste.
@@ -140,7 +142,7 @@ Vitor — dev de jogos mobile (Unity/C#), sem familiaridade prévia com Supabase
 - [ ] Lista de condôminos do condomínio, visível só pro síndico (nome, unidade, papel, contato) — ver decisão em aberto sobre `telefone` na Parte 1
 - Analytics → movido pra Parte 3, virou pré-requisito do modelo de negócio, não feature de Gestão
 
-### Onboarding self-service — FEITO (falta rodar a migração)
+### Onboarding self-service — FEITO
 
 Levantado em 20/08/2026. Não existia no backlog antes; é o gargalo real entre "app do meu prédio" e "produto".
 
@@ -200,12 +202,9 @@ Não são recomendação de implementar tudo — são ideias pra avaliar quando 
 - [ ] Anexar documento/pauta a uma votação
 - [ ] Relato confidencial (só síndico vê) como opção alternativa ao relato público em Problemas
 
-## Como priorizar quando voltarmos
+## Como priorizar
 
-1. **Rápido de fazer, alto impacto:** desmarcar presença, dia/horário no feed, curtir posts, moderação básica do feed (remover post) — ajustes pequenos em telas que já existem
-2. **Médio esforço:** cancelar reunião com aviso, arquivar sugestões/problemas, lista de condôminos, regras do condomínio + aviso automático, respostas em thread no feed
-3. **Maior esforço (schema novo + telas novas, ou serviço externo):** subsíndico/conselho, reserva de salão com calendário de bloqueios, controle de encomendas, push notifications (exige configurar FCM/Expo Notifications)
-4. **Avaliar depois, mais dependente de operação real do condomínio:** pré-liberação de visitantes, documentos, avaliação de prestador, seção financeira/prestação de contas
+Ver **Parte 4 — Roadmap**. A lista de esforço que ficava aqui foi absorvida por ele.
 
 ---
 
@@ -289,3 +288,76 @@ Nota: a parte mais difícil de virar produto — multi-tenancy com isolamento po
 - Testar apetite de compra com síndicos/imobiliárias reais antes de investir em desenvolvimento completo.
 - Definir e testar o critério de engajamento do trial com um grupo piloto pequeno.
 - Avaliar modelo alternativo (freemium: base grátis para síndico, upsell pago em features específicas) como comparação ao modelo atual de cobrança direta.
+
+---
+
+# Parte 4 — Roadmap
+
+*Montado em 20/08/2026, logo depois de fechar o onboarding self-service. Os itens vêm da Parte 2; aqui eles ganham ordem e motivo. O critério de ordenação é o que destrava o quê — não o tamanho da tarefa.*
+
+## Onde estamos
+
+MVP completo e em uso num condomínio real. Um condomínio novo entra sozinho, sem ninguém abrir o painel do Supabase. O que falta não é uma lista de features soltas: são três saltos, nesta ordem — **medir**, **notificar**, **operar**.
+
+## Fase 1 — Piloto medível (próxima)
+
+**Meta:** saber se o app está sendo usado de verdade, e dar ao síndico o mínimo pra tocar o dia a dia sem pedir socorro.
+
+| Item | Por quê agora |
+|---|---|
+| **Analytics de engajamento** | Gate do modelo de negócio. Sem número objetivo não dá pra decidir quem estende o trial de 3 pra 6 meses, e a Parte 3 já registra que o critério precisa ser comunicado ao síndico na entrada. Escopo mínimo: % de unidades com morador ativo, posts/semana, avisos publicados, participação na última votação. |
+| Lista de condôminos (síndico) | Primeira coisa que síndico pede. Bloqueada pela decisão sobre `telefone` na Parte 1 — resolver a decisão faz parte do item. |
+| "Aberto há X dias" nos Problemas | Poucas horas de trabalho e ataca a reclamação nº1 da pesquisa (síndico que não responde). O dado já existe em `criado_em` + `historico_status`; é cálculo e badge. |
+| Arquivar sugestões/problemas + ver arquivados | A lista ativa vira lixo depois de dois meses de uso real. |
+| Cancelar reunião, com aviso automático | Buraco óbvio: dá pra marcar e não dá pra desmarcar. |
+| `unique (condominio_id, bloco, numero)` | Dívida técnica conhecida: duplicata de unidade só é checada no client. |
+
+## Fase 2 — Hábito
+
+**Meta:** o app aparecer sozinho, e a conversa acontecer dentro dele. É aqui que se ganha ou se perde do grupo de WhatsApp — e nenhuma feature da Fase 3 importa se esta falhar.
+
+| Item | Por quê |
+|---|---|
+| **Push notifications** | O item de maior impacto em retenção do backlog inteiro. Sem notificação o app só existe quando a pessoa lembra dele; o grupo do WhatsApp aparece sozinho. |
+| Comentários no feed (UI) | As tabelas `comentarios` existem desde o começo e nenhuma tela usa. Sem comentário não há conversa, e sem conversa o Mural é um quadro de avisos. |
+| Respostas em thread + moderação de comentários | A policy de delete de comentário já existe; falta a UI. |
+| Retirar apoio de sugestão | A policy de delete em `apoios` já existe; falta o botão. Item pequeno, fecha uma inconsistência. |
+| Revisão de layout | O backlog já previa isso "depois que o funcional amadurecer". É aqui. |
+
+**Atenção — decisão de infraestrutura escondida nesta fase.** Push remoto não funciona no Expo Go desde o SDK 53: exige um *development build*. Isso muda o fluxo de trabalho (não dá mais pra testar só escaneando a URL) e é o mesmo passo que gera o `.apk` sideloaded que o projeto já queria pra distribuição. Ou seja, push e distribuição são **o mesmo trabalho de infra** — vale fazer uma vez e destravar os dois. Confirmar na doc do SDK 54 antes de começar.
+
+## Fase 3 — Operar o condomínio
+
+**Meta:** fazer o que o WhatsApp não faz. Aqui o app deixa de ser comunicação e vira ferramenta de gestão — é o que justifica cobrar.
+
+- Reserva de salão com calendário de datas bloqueadas
+- Regras do condomínio editáveis, com aviso automático quando mudarem
+- Subsíndico e conselho fiscal (níveis de permissão intermediários)
+- Troca de vaga de garagem entre condôminos
+- Relato confidencial em Problemas (visível só ao síndico), separado do relato público
+
+## Fase 4 — Avaliar com operação real
+
+**Meta:** decidir com dado de campo, não com aposta. Nada aqui deveria ser construído antes de um condomínio estar usando as fases anteriores de verdade.
+
+- **Prestação de contas simplificada** — a reclamação nº1 com número concreto (21% das reclamações em assembleias, AABIC), e ainda não endereçada. Candidata natural a ser a primeira desta fase.
+- Documentos do condomínio (atas, convenção, regimento) — esforço baixo, valor percebido alto
+- Anexar pauta/documento a uma votação + lembrete antes do prazo encerrar (depende de push)
+- Controle de encomendas
+- Avaliação de prestador de serviço, depois de um problema resolvido
+- Pré-liberação de visitantes (depende de integração com portaria)
+- Galeria de fotos do condomínio
+
+## Trilha paralela — negócio
+
+Não depende de código e não deveria esperar as fases acima:
+
+- Definir o critério de adesão do trial **em número**, antes do primeiro piloto externo
+- Testar apetite de compra com síndicos e imobiliárias reais
+- Comparar o modelo atual (R$ 5/condômino) com um freemium, como controle
+
+## O que deliberadamente não está no topo
+
+- **Regras do condomínio** — valor percebido alto, mas é conteúdo estático que muda uma vez por ano. Impacto em uso diário baixo.
+- **Pré-liberação de visitantes** — a feature mais elogiada em review de concorrente, e a mais cara: depende de operação de portaria, que você não controla.
+- **Gestão financeira completa** — fora do escopo por posicionamento. O plano define o Varanda como app de comunicação; competir com Superlógica em boleto e fiscal é outro produto.

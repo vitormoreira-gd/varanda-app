@@ -58,6 +58,23 @@ create table if not exists vinculos (
   unique (usuario_id, unidade_id)
 );
 
+-- ---------- CÓDIGOS DE FUNDAÇÃO ----------
+-- Gate de entrada de condomínio novo: um código é emitido fora do app e
+-- quem digitar vira o primeiro síndico. Resolve o paradoxo do primeiro
+-- síndico — eh_sindico() exige um vínculo aprovado que ainda não existe,
+-- e não pode ser o próprio usuário se declarando síndico.
+--
+-- Para emitir um código:
+--   insert into codigos_fundacao (codigo, observacao)
+--   values ('VARANDA-2026-ABC', 'Ed. Fulano — trial iniciado 20/08');
+create table if not exists codigos_fundacao (
+  codigo text primary key,
+  observacao text,
+  usado_por uuid references usuarios(id),
+  usado_em timestamptz,
+  criado_em timestamptz not null default now()
+);
+
 -- ---------- MURAL (posts sociais) ----------
 create table if not exists posts (
   id uuid primary key default uuid_generate_v4(),
@@ -242,6 +259,10 @@ alter table votacoes enable row level security;
 alter table votos enable row level security;
 alter table reunioes enable row level security;
 alter table rsvps enable row level security;
+-- codigos_fundacao fica com RLS ligado e SEM nenhuma policy, de propósito:
+-- ninguém lê nem escreve pela API, o único caminho é fundar_condominio(),
+-- que roda como security definer. Impede listar códigos ainda não usados.
+alter table codigos_fundacao enable row level security;
 
 drop policy if exists "usuario ve proprio perfil" on usuarios;
 create policy "usuario ve proprio perfil" on usuarios
@@ -441,6 +462,13 @@ drop policy if exists "ver unidades do meu condominio" on unidades;
 create policy "ver unidades do meu condominio" on unidades
   for select using (condominio_id in (select condominios_do_usuario()));
 
+-- Insert direto com policy resolve o cadastro de unidades pelo síndico —
+-- não precisa de RPC, porque aqui o condominio_id já existe e
+-- eh_sindico() já funciona.
+drop policy if exists "sindico cria unidade" on unidades;
+create policy "sindico cria unidade" on unidades
+  for insert with check (eh_sindico(condominio_id));
+
 -- NOVO: síndico pode remover post/comentário do feed (moderação)
 drop policy if exists "sindico modera posts" on posts;
 create policy "sindico modera posts" on posts
@@ -488,3 +516,68 @@ end;
 $$;
 
 grant execute on function vincular_por_codigo(text) to authenticated;
+
+-- ============================================================
+-- RPC: funda um condomínio novo. Cria condomínio + a unidade do
+-- síndico + o vínculo já aprovado numa transação só, e queima o
+-- código de fundação.
+-- ============================================================
+create or replace function fundar_condominio(
+  p_codigo text,
+  p_nome_condominio text,
+  p_endereco text,
+  p_bloco text,
+  p_numero text
+)
+returns uuid
+language plpgsql
+security definer
+as $$
+declare
+  v_usado_por uuid;
+  v_condominio_id uuid;
+  v_unidade_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'Precisa estar logado para fundar um condomínio';
+  end if;
+
+  if not exists (select 1 from usuarios u where u.id = auth.uid()) then
+    raise exception 'Complete seu perfil antes de fundar um condomínio';
+  end if;
+
+  -- for update segura o código até o fim da transação: dois cliques
+  -- simultâneos não conseguem usar o mesmo código duas vezes.
+  select cf.usado_por into v_usado_por
+  from codigos_fundacao cf
+  where cf.codigo = p_codigo
+  for update;
+
+  if not found then
+    raise exception 'Código de fundação inválido';
+  end if;
+
+  if v_usado_por is not null then
+    raise exception 'Este código de fundação já foi usado';
+  end if;
+
+  insert into condominios (nome, endereco)
+  values (p_nome_condominio, nullif(p_endereco, ''))
+  returning id into v_condominio_id;
+
+  insert into unidades (condominio_id, bloco, numero)
+  values (v_condominio_id, nullif(p_bloco, ''), p_numero)
+  returning id into v_unidade_id;
+
+  insert into vinculos (usuario_id, unidade_id, papel, status)
+  values (auth.uid(), v_unidade_id, 'sindico', 'aprovado');
+
+  update codigos_fundacao
+  set usado_por = auth.uid(), usado_em = now()
+  where codigo = p_codigo;
+
+  return v_condominio_id;
+end;
+$$;
+
+grant execute on function fundar_condominio(text, text, text, text, text) to authenticated;
