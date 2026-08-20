@@ -126,7 +126,7 @@ Vitor — dev de jogos mobile (Unity/C#), sem familiaridade prévia com Supabase
 - [x] Mostrar dia/horário de cada mensagem no feed — `lib/datas.ts` + cabeçalho do card no Mural
 - [x] Moderação do feed — botão "Remover" no card, visível só pra `papel === 'sindico'`, com confirmação. Remove post; remoção de comentário fica pra quando o feed tiver comentários na UI.
 - [x] Comentários no feed — card expande com a lista de comentários e campo pra escrever; síndico remove comentário individual. A tabela `comentarios` existia desde o schema original sem nenhuma tela usando
-- [ ] Respostas a mensagens no feed, estilo thread (responder um comentário específico, não só comentar solto) — exige coluna `resposta_a` em `comentarios`
+- ~~Respostas em thread~~ **descartado em 20/08/2026** — a estrutura plana de comentários resolve. Aninhar comentário dentro de comentário adiciona coluna nova, recursão na UI e confusão pro morador, sem ganho real numa conversa de condomínio
 
 ### Sugestões
 - [x] Retirar apoio — o `toggleApoio` já fazia o delete desde sempre, mas faltava a policy; agora funciona e detecta bloqueio de RLS
@@ -311,7 +311,7 @@ MVP completo e em uso num condomínio real. Um condomínio novo entra sozinho, s
 | Item | Por quê agora |
 |---|---|
 | ~~**Comentários no feed**~~ FEITO | A tabela `comentarios` existia desde o schema original, com policies de insert e delete, e nenhuma tela jamais usou. Sem comentário não há conversa; sem conversa o Mural perde do WhatsApp por definição. |
-| Respostas em thread | Depois do comentário simples funcionando. Exige coluna nova (`resposta_a`) — mudança pequena de schema. |
+| ~~Respostas em thread~~ DESCARTADO | Decisão de 20/08/2026: a estrutura plana já resolve. Comentário dentro de comentário não paga o custo numa conversa de prédio. |
 | ~~Moderação de comentário (síndico)~~ FEITO | Saiu junto dos comentários: link "remover" em cada comentário, visível só pro síndico. |
 | ~~Retirar apoio de sugestão~~ FEITO | O código já fazia o delete; faltava a policy, que veio no patch de 20/08. Só precisou de endurecimento contra falha silenciosa. |
 | "Aberto há X dias" nos Problemas | Poucas horas, e o morador vê que a coisa anda — ataca a reclamação nº1 da pesquisa (síndico que não responde). Dado já existe em `criado_em` + `historico_status`. |
