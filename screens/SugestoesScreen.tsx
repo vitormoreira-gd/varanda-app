@@ -102,13 +102,32 @@ export default function SugestoesScreen() {
     const jaApoiou = meusApoios.has(sugestaoId);
 
     if (jaApoiou) {
-      await supabase
+      // .select() devolve as linhas removidas: RLS que bloqueia delete não
+      // gera erro, gera lista vazia. Sem isso a falha é silenciosa.
+      const { data, error } = await supabase
         .from('apoios')
         .delete()
         .eq('sugestao_id', sugestaoId)
-        .eq('usuario_id', userId);
+        .eq('usuario_id', userId)
+        .select();
+
+      if (error) {
+        Alert.alert('Erro ao retirar apoio', error.message);
+        return;
+      }
+      if (!data || data.length === 0) {
+        Alert.alert('Não consegui retirar', 'O banco recusou a remoção do apoio.');
+        return;
+      }
     } else {
-      await supabase.from('apoios').insert({ sugestao_id: sugestaoId, usuario_id: userId });
+      const { error } = await supabase
+        .from('apoios')
+        .insert({ sugestao_id: sugestaoId, usuario_id: userId });
+
+      if (error) {
+        Alert.alert('Erro ao apoiar', error.message);
+        return;
+      }
     }
     carregar();
   }

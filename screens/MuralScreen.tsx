@@ -14,12 +14,20 @@ import { supabase } from '../lib/supabase';
 import { useMeuCondominio } from '../lib/useMeuCondominio';
 import { formatarDataHora } from '../lib/datas';
 
+type Comentario = {
+  id: string;
+  texto: string;
+  criado_em: string;
+  usuarios: { nome: string } | null;
+};
+
 type Post = {
   id: string;
   texto: string;
   criado_em: string;
   usuarios: { nome: string } | null;
   curtidas: { usuario_id: string }[];
+  comentarios: Comentario[];
 };
 
 export default function MuralScreen() {
@@ -28,6 +36,7 @@ export default function MuralScreen() {
   const [texto, setTexto] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
 
   const ehSindico = papel === 'sindico';
 
@@ -38,7 +47,10 @@ export default function MuralScreen() {
   const carregarPosts = useCallback(async () => {
     const { data, error } = await supabase
       .from('posts')
-      .select('id, texto, criado_em, usuarios!autor_id(nome), curtidas(usuario_id)')
+      .select(
+        'id, texto, criado_em, usuarios!autor_id(nome), curtidas(usuario_id), ' +
+          'comentarios(id, texto, criado_em, usuarios!autor_id(nome))'
+      )
       .order('criado_em', { ascending: false });
 
     if (error) {
@@ -59,21 +71,15 @@ export default function MuralScreen() {
   async function publicar() {
     if (!texto.trim()) return;
 
-    if (!condominioId) {
+    if (!condominioId || !userId) {
       Alert.alert('Aviso', 'Não encontrei seu condomínio ainda. Feche e reabra o app.');
-      return;
-    }
-
-    const { data: userData, error: erroUser } = await supabase.auth.getUser();
-    if (erroUser || !userData.user) {
-      Alert.alert('Erro', 'Não consegui identificar seu usuário logado.');
       return;
     }
 
     const { error } = await supabase.from('posts').insert({
       texto: texto.trim(),
       condominio_id: condominioId,
-      autor_id: userData.user.id,
+      autor_id: userId,
     });
 
     if (error) {
@@ -107,10 +113,7 @@ export default function MuralScreen() {
         return;
       }
       if (!data || data.length === 0) {
-        Alert.alert(
-          'Não consegui descurtir',
-          'O banco recusou a remoção. Falta rodar db/patch-politicas-faltantes.sql (policy "descurtir post").'
-        );
+        Alert.alert('Não consegui descurtir', 'O banco recusou a remoção da curtida.');
         return;
       }
       atualizarCurtidasLocal(post.id, (lista) => lista.filter((c) => c.usuario_id !== userId));
@@ -136,10 +139,51 @@ export default function MuralScreen() {
     );
   }
 
+  function toggleExpandido(postId: string) {
+    setExpandidos((atuais) => {
+      const novo = new Set(atuais);
+      if (novo.has(postId)) novo.delete(postId);
+      else novo.add(postId);
+      return novo;
+    });
+  }
+
+  async function comentar(postId: string, texto: string) {
+    if (!texto.trim() || !userId) return;
+
+    const { error } = await supabase
+      .from('comentarios')
+      .insert({ post_id: postId, autor_id: userId, texto: texto.trim() });
+
+    if (error) {
+      Alert.alert('Erro ao comentar', error.message);
+      return;
+    }
+    await carregarPosts();
+  }
+
+  async function removerComentario(comentarioId: string) {
+    const { data, error } = await supabase
+      .from('comentarios')
+      .delete()
+      .eq('id', comentarioId)
+      .select();
+
+    if (error) {
+      Alert.alert('Erro ao remover comentário', error.message);
+      return;
+    }
+    if (!data || data.length === 0) {
+      Alert.alert('Não consegui remover', 'O banco recusou a remoção do comentário.');
+      return;
+    }
+    carregarPosts();
+  }
+
   function confirmarRemocao(post: Post) {
     Alert.alert(
       'Remover post',
-      `Remover a publicação de ${post.usuarios?.nome ?? 'um vizinho'}? Isso não pode ser desfeito.`,
+      `Remover a publicação de ${post.usuarios?.nome ?? 'um vizinho'}? Os comentários vão junto e isso não pode ser desfeito.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         { text: 'Remover', style: 'destructive', onPress: () => removerPost(post) },
@@ -155,10 +199,7 @@ export default function MuralScreen() {
       return;
     }
     if (!data || data.length === 0) {
-      Alert.alert(
-        'Não consegui remover',
-        'O banco recusou a remoção. Confira se a policy "sindico modera posts" já foi aplicada.'
-      );
+      Alert.alert('Não consegui remover', 'O banco recusou a remoção do post.');
       return;
     }
     setPosts((atuais) => atuais.filter((p) => p.id !== post.id));
@@ -199,35 +240,120 @@ export default function MuralScreen() {
         ListEmptyComponent={
           <Text style={styles.vazio}>Nada por aqui ainda. Que tal ser o primeiro a postar?</Text>
         }
-        renderItem={({ item }) => {
-          const curtido = !!userId && item.curtidas.some((c) => c.usuario_id === userId);
-          const total = item.curtidas.length;
-
-          return (
-            <View style={styles.card}>
-              <View style={styles.cabecalho}>
-                <Text style={styles.autor}>{item.usuarios?.nome ?? 'Vizinho'}</Text>
-                <Text style={styles.data}>{formatarDataHora(item.criado_em)}</Text>
-              </View>
-              <Text style={styles.texto}>{item.texto}</Text>
-
-              <View style={styles.rodape}>
-                <Pressable onPress={() => toggleCurtida(item)} hitSlop={8}>
-                  <Text style={[styles.curtir, curtido && styles.curtirAtivo]}>
-                    {curtido ? '♥' : '♡'} {total > 0 ? total : ''}
-                  </Text>
-                </Pressable>
-
-                {ehSindico && (
-                  <Pressable onPress={() => confirmarRemocao(item)} hitSlop={8}>
-                    <Text style={styles.remover}>Remover</Text>
-                  </Pressable>
-                )}
-              </View>
-            </View>
-          );
-        }}
+        renderItem={({ item }) => (
+          <CardPost
+            post={item}
+            userId={userId}
+            ehSindico={ehSindico}
+            expandido={expandidos.has(item.id)}
+            aoExpandir={() => toggleExpandido(item.id)}
+            aoCurtir={() => toggleCurtida(item)}
+            aoRemover={() => confirmarRemocao(item)}
+            aoComentar={(texto) => comentar(item.id, texto)}
+            aoRemoverComentario={removerComentario}
+          />
+        )}
       />
+    </View>
+  );
+}
+
+function CardPost({
+  post,
+  userId,
+  ehSindico,
+  expandido,
+  aoExpandir,
+  aoCurtir,
+  aoRemover,
+  aoComentar,
+  aoRemoverComentario,
+}: {
+  post: Post;
+  userId: string | null;
+  ehSindico: boolean;
+  expandido: boolean;
+  aoExpandir: () => void;
+  aoCurtir: () => void;
+  aoRemover: () => void;
+  aoComentar: (texto: string) => Promise<void>;
+  aoRemoverComentario: (id: string) => void;
+}) {
+  const [rascunho, setRascunho] = useState('');
+  const [enviando, setEnviando] = useState(false);
+
+  const curtido = !!userId && post.curtidas.some((c) => c.usuario_id === userId);
+  const totalCurtidas = post.curtidas.length;
+  const comentarios = [...post.comentarios].sort((a, b) => a.criado_em.localeCompare(b.criado_em));
+
+  async function enviar() {
+    setEnviando(true);
+    await aoComentar(rascunho);
+    setEnviando(false);
+    setRascunho('');
+  }
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.cabecalho}>
+        <Text style={styles.autor}>{post.usuarios?.nome ?? 'Vizinho'}</Text>
+        <Text style={styles.data}>{formatarDataHora(post.criado_em)}</Text>
+      </View>
+      <Text style={styles.texto}>{post.texto}</Text>
+
+      <View style={styles.rodape}>
+        <View style={styles.acoes}>
+          <Pressable onPress={aoCurtir} hitSlop={8}>
+            <Text style={[styles.acao, curtido && styles.curtirAtivo]}>
+              {curtido ? '♥' : '♡'} {totalCurtidas > 0 ? totalCurtidas : ''}
+            </Text>
+          </Pressable>
+
+          <Pressable onPress={aoExpandir} hitSlop={8}>
+            <Text style={styles.acao}>
+              {comentarios.length === 0
+                ? 'Comentar'
+                : `${comentarios.length} comentário${comentarios.length > 1 ? 's' : ''}`}
+            </Text>
+          </Pressable>
+        </View>
+
+        {ehSindico && (
+          <Pressable onPress={aoRemover} hitSlop={8}>
+            <Text style={styles.remover}>Remover</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {expandido && (
+        <View style={styles.comentarios}>
+          {comentarios.map((c) => (
+            <View key={c.id} style={styles.comentario}>
+              <View style={styles.cabecalho}>
+                <Text style={styles.comentarioAutor}>{c.usuarios?.nome ?? 'Vizinho'}</Text>
+                <Text style={styles.data}>{formatarDataHora(c.criado_em)}</Text>
+              </View>
+              <Text style={styles.comentarioTexto}>{c.texto}</Text>
+              {ehSindico && (
+                <Pressable onPress={() => aoRemoverComentario(c.id)} hitSlop={6}>
+                  <Text style={styles.removerComentario}>remover</Text>
+                </Pressable>
+              )}
+            </View>
+          ))}
+
+          <View style={styles.novoComentario}>
+            <TextInput
+              style={[styles.input, { flex: 1 }]}
+              placeholder="Escreva um comentário..."
+              value={rascunho}
+              onChangeText={setRascunho}
+              multiline
+            />
+            <Button title="Enviar" onPress={enviar} disabled={enviando || !rascunho.trim()} />
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -268,8 +394,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 10,
   },
-  curtir: { fontSize: 15, color: '#6B665D' },
+  acoes: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  acao: { fontSize: 13, color: '#6B665D' },
   curtirAtivo: { color: '#B4483C', fontWeight: '700' },
   remover: { fontSize: 12, color: '#B4483C' },
+  comentarios: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E4DFD2',
+    gap: 10,
+  },
+  comentario: {
+    backgroundColor: '#F7F5EF',
+    borderRadius: 10,
+    padding: 10,
+  },
+  comentarioAutor: { fontWeight: '600', color: '#1B4B66', fontSize: 12, flexShrink: 1 },
+  comentarioTexto: { fontSize: 13, color: '#211F1B' },
+  removerComentario: { fontSize: 11, color: '#B4483C', marginTop: 6 },
+  novoComentario: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   vazio: { textAlign: 'center', color: '#6B665D', marginTop: 40 },
 });

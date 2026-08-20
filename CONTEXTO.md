@@ -104,7 +104,8 @@ Corrigido nesta sessão:
 - **Onboarding self-service** construído (ver backlog). Ao escrever, descobri que o fluxo de entrada não existia: `vincular_por_codigo` não era chamada em lugar nenhum do app, e nada criava a linha em `usuarios` — os perfis existentes devem ter sido inseridos à mão no painel. O CONTEXTO dizia que esse fluxo tinha sido testado; não tinha.
 - **Bug latente grave corrigido no hook**: `.maybeSingle()` em `vinculos` sem filtro de `usuario_id` (ver armadilha nº5). O app do síndico ia quebrar assim que o segundo morador fosse aprovado.
 
-Aberto: `apoios` agora aceita `delete`, mas nenhuma tela usa — retirar apoio de uma sugestão continua sem botão em `SugestoesScreen`.
+- **Comentários no Mural** (Fase 1 do roadmap): card expande, lista comentários, campo pra escrever, síndico remove comentário. Primeira vez que a tabela `comentarios` é usada.
+- Push notifications e analytics **adiados por decisão** de 20/08/2026 — ver Parte 4.
 
 MVP funcionalmente completo e testado (antes desta sessão): cadastro → vínculo por código de convite → aprovação pelo síndico → Mural, Sugestões (com apoio), Problemas (com histórico de status), Oficial (avisos fixados, votação por unidade, reunião com RSVP e seletor de data/hora nativo) → Gestão do síndico pra tudo isso.
 
@@ -124,7 +125,11 @@ Vitor — dev de jogos mobile (Unity/C#), sem familiaridade prévia com Supabase
 - [x] Curtir mensagens do feed — toggle otimista no card, contador vem do embed `curtidas(usuario_id)`
 - [x] Mostrar dia/horário de cada mensagem no feed — `lib/datas.ts` + cabeçalho do card no Mural
 - [x] Moderação do feed — botão "Remover" no card, visível só pra `papel === 'sindico'`, com confirmação. Remove post; remoção de comentário fica pra quando o feed tiver comentários na UI.
-- [ ] Respostas a mensagens no feed, estilo thread (responder um post específico, não só comentar solto)
+- [x] Comentários no feed — card expande com a lista de comentários e campo pra escrever; síndico remove comentário individual. A tabela `comentarios` existia desde o schema original sem nenhuma tela usando
+- [ ] Respostas a mensagens no feed, estilo thread (responder um comentário específico, não só comentar solto) — exige coluna `resposta_a` em `comentarios`
+
+### Sugestões
+- [x] Retirar apoio — o `toggleApoio` já fazia o delete desde sempre, mas faltava a policy; agora funciona e detecta bloqueio de RLS
 
 ### Reuniões
 - [x] Permitir desmarcar presença — o código já fazia o `delete` desde sempre, mas faltava a policy no banco, então nunca removeu nada. Policy aplicada em 20/08/2026
@@ -293,71 +298,68 @@ Nota: a parte mais difícil de virar produto — multi-tenancy com isolamento po
 
 # Parte 4 — Roadmap
 
-*Montado em 20/08/2026, logo depois de fechar o onboarding self-service. Os itens vêm da Parte 2; aqui eles ganham ordem e motivo. O critério de ordenação é o que destrava o quê — não o tamanho da tarefa.*
+*Montado em 20/08/2026 e reordenado no mesmo dia, depois da decisão de adiar push notifications e tudo que for burocrático. O critério agora é: primeiro o que o morador sente abrindo o app, depois o que o síndico precisa pra tocar, depois o que justifica cobrar, e por último o que só importa quando for vender pra fora.*
 
 ## Onde estamos
 
-MVP completo e em uso num condomínio real. Um condomínio novo entra sozinho, sem ninguém abrir o painel do Supabase. O que falta não é uma lista de features soltas: são três saltos, nesta ordem — **medir**, **notificar**, **operar**.
+MVP completo e em uso num condomínio real. Um condomínio novo entra sozinho, sem ninguém abrir o painel do Supabase. A pergunta que manda agora não é "o que falta pra vender", é **"por que alguém abriria isso em vez do grupo do WhatsApp"**.
 
-## Fase 1 — Piloto medível (próxima)
+## Fase 1 — Conversa (próxima)
 
-**Meta:** saber se o app está sendo usado de verdade, e dar ao síndico o mínimo pra tocar o dia a dia sem pedir socorro.
+**Meta:** o Mural virar lugar de conversa, não quadro de avisos. Hoje dá pra publicar e curtir, e a interação morre aí.
 
 | Item | Por quê agora |
 |---|---|
-| **Analytics de engajamento** | Gate do modelo de negócio. Sem número objetivo não dá pra decidir quem estende o trial de 3 pra 6 meses, e a Parte 3 já registra que o critério precisa ser comunicado ao síndico na entrada. Escopo mínimo: % de unidades com morador ativo, posts/semana, avisos publicados, participação na última votação. |
-| Lista de condôminos (síndico) | Primeira coisa que síndico pede. Bloqueada pela decisão sobre `telefone` na Parte 1 — resolver a decisão faz parte do item. |
-| "Aberto há X dias" nos Problemas | Poucas horas de trabalho e ataca a reclamação nº1 da pesquisa (síndico que não responde). O dado já existe em `criado_em` + `historico_status`; é cálculo e badge. |
-| Arquivar sugestões/problemas + ver arquivados | A lista ativa vira lixo depois de dois meses de uso real. |
-| Cancelar reunião, com aviso automático | Buraco óbvio: dá pra marcar e não dá pra desmarcar. |
-| `unique (condominio_id, bloco, numero)` | Dívida técnica conhecida: duplicata de unidade só é checada no client. |
+| ~~**Comentários no feed**~~ FEITO | A tabela `comentarios` existia desde o schema original, com policies de insert e delete, e nenhuma tela jamais usou. Sem comentário não há conversa; sem conversa o Mural perde do WhatsApp por definição. |
+| Respostas em thread | Depois do comentário simples funcionando. Exige coluna nova (`resposta_a`) — mudança pequena de schema. |
+| ~~Moderação de comentário (síndico)~~ FEITO | Saiu junto dos comentários: link "remover" em cada comentário, visível só pro síndico. |
+| ~~Retirar apoio de sugestão~~ FEITO | O código já fazia o delete; faltava a policy, que veio no patch de 20/08. Só precisou de endurecimento contra falha silenciosa. |
+| "Aberto há X dias" nos Problemas | Poucas horas, e o morador vê que a coisa anda — ataca a reclamação nº1 da pesquisa (síndico que não responde). Dado já existe em `criado_em` + `historico_status`. |
+| Revisão de layout | Faz sentido junto: vamos mexer nessas telas de qualquer jeito. |
 
-## Fase 2 — Hábito
+## Fase 2 — Dia a dia do síndico
 
-**Meta:** o app aparecer sozinho, e a conversa acontecer dentro dele. É aqui que se ganha ou se perde do grupo de WhatsApp — e nenhuma feature da Fase 3 importa se esta falhar.
+**Meta:** o síndico tocar o condomínio sem pedir socorro nem abrir o painel do Supabase.
 
-| Item | Por quê |
-|---|---|
-| **Push notifications** | O item de maior impacto em retenção do backlog inteiro. Sem notificação o app só existe quando a pessoa lembra dele; o grupo do WhatsApp aparece sozinho. |
-| Comentários no feed (UI) | As tabelas `comentarios` existem desde o começo e nenhuma tela usa. Sem comentário não há conversa, e sem conversa o Mural é um quadro de avisos. |
-| Respostas em thread + moderação de comentários | A policy de delete de comentário já existe; falta a UI. |
-| Retirar apoio de sugestão | A policy de delete em `apoios` já existe; falta o botão. Item pequeno, fecha uma inconsistência. |
-| Revisão de layout | O backlog já previa isso "depois que o funcional amadurecer". É aqui. |
+- Cancelar reunião, com aviso automático junto (hoje dá pra marcar e não dá pra desmarcar)
+- Arquivar sugestões/problemas + acesso ao arquivo (a lista ativa vira lixo em dois meses de uso real)
+- Lista de condôminos — bloqueada pela decisão sobre `telefone` na Parte 1
+- `unique (condominio_id, bloco, numero)` — dívida técnica: duplicata de unidade só é checada no client
 
-**Atenção — decisão de infraestrutura escondida nesta fase.** Push remoto não funciona no Expo Go desde o SDK 53: exige um *development build*. Isso muda o fluxo de trabalho (não dá mais pra testar só escaneando a URL) e é o mesmo passo que gera o `.apk` sideloaded que o projeto já queria pra distribuição. Ou seja, push e distribuição são **o mesmo trabalho de infra** — vale fazer uma vez e destravar os dois. Confirmar na doc do SDK 54 antes de começar.
+## Fase 3 — Gestão do condomínio
 
-## Fase 3 — Operar o condomínio
-
-**Meta:** fazer o que o WhatsApp não faz. Aqui o app deixa de ser comunicação e vira ferramenta de gestão — é o que justifica cobrar.
+**Meta:** fazer o que o WhatsApp não faz. É o que justifica cobrar, quando chegar a hora de cobrar.
 
 - Reserva de salão com calendário de datas bloqueadas
 - Regras do condomínio editáveis, com aviso automático quando mudarem
-- Subsíndico e conselho fiscal (níveis de permissão intermediários)
+- Subsíndico e conselho fiscal (permissões intermediárias)
 - Troca de vaga de garagem entre condôminos
 - Relato confidencial em Problemas (visível só ao síndico), separado do relato público
 
-## Fase 4 — Avaliar com operação real
+## Fase 4 — Só quando for pra fora
 
-**Meta:** decidir com dado de campo, não com aposta. Nada aqui deveria ser construído antes de um condomínio estar usando as fases anteriores de verdade.
+**Meta:** nada aqui vale antes de existir um segundo condomínio real. São itens de escala e de venda, não de produto.
 
-- **Prestação de contas simplificada** — a reclamação nº1 com número concreto (21% das reclamações em assembleias, AABIC), e ainda não endereçada. Candidata natural a ser a primeira desta fase.
-- Documentos do condomínio (atas, convenção, regimento) — esforço baixo, valor percebido alto
-- Anexar pauta/documento a uma votação + lembrete antes do prazo encerrar (depende de push)
+- **Push notifications** — adiado por decisão de 20/08/2026. Continua sendo o maior item de retenção do backlog, mas exige *development build* (não roda no Expo Go desde o SDK 53), o que quebra o fluxo de teste atual. Bom saber: é o **mesmo** trabalho de infra que gera o `.apk` sideloaded pra distribuição — quando for encarar, resolve os dois de uma vez.
+- **Analytics de engajamento** — gate do trial condicional descrito na Parte 3. Sem ele não dá pra decidir quem estende de 3 pra 6 meses. Enquanto houver um condomínio só, dá pra olhar no painel do Supabase na mão.
+- Prestação de contas simplificada — a reclamação nº1 com número concreto (21%, AABIC)
+- Documentos do condomínio (atas, convenção, regimento)
+- Anexar pauta/documento a uma votação + lembrete antes do prazo (depende de push)
 - Controle de encomendas
-- Avaliação de prestador de serviço, depois de um problema resolvido
-- Pré-liberação de visitantes (depende de integração com portaria)
-- Galeria de fotos do condomínio
+- Avaliação de prestador depois de um problema resolvido
+- Pré-liberação de visitantes (depende de portaria, que não é sua)
+- Galeria de fotos
 
 ## Trilha paralela — negócio
 
-Não depende de código e não deveria esperar as fases acima:
+Não depende de código, mas está **parada por decisão** enquanto o foco é produto:
 
-- Definir o critério de adesão do trial **em número**, antes do primeiro piloto externo
+- Definir o critério de adesão do trial em número, antes do primeiro piloto externo
 - Testar apetite de compra com síndicos e imobiliárias reais
 - Comparar o modelo atual (R$ 5/condômino) com um freemium, como controle
 
 ## O que deliberadamente não está no topo
 
-- **Regras do condomínio** — valor percebido alto, mas é conteúdo estático que muda uma vez por ano. Impacto em uso diário baixo.
-- **Pré-liberação de visitantes** — a feature mais elogiada em review de concorrente, e a mais cara: depende de operação de portaria, que você não controla.
-- **Gestão financeira completa** — fora do escopo por posicionamento. O plano define o Varanda como app de comunicação; competir com Superlógica em boleto e fiscal é outro produto.
+- **Regras do condomínio** — valor percebido alto, mas é conteúdo estático que muda uma vez por ano
+- **Pré-liberação de visitantes** — a feature mais elogiada em review de concorrente, e a mais cara: depende de operação de portaria
+- **Gestão financeira completa** — fora de escopo por posicionamento. O plano define o Varanda como app de comunicação; competir com Superlógica em boleto e fiscal é outro produto
