@@ -9,10 +9,19 @@ export default function AuthScreen() {
 
   async function cadastrar() {
     setBusy(true);
-    const { error } = await supabase.auth.signUp({ email, password: senha });
+    const { data, error } = await supabase.auth.signUp({ email, password: senha });
     setBusy(false);
-    if (error) Alert.alert('Erro no cadastro', error.message);
-    else Alert.alert('Conta criada', 'Agora faça login.');
+
+    if (error) {
+      Alert.alert('Erro no cadastro', error.message);
+      return;
+    }
+    // Com "Confirm email" desligado no Supabase, o signUp já devolve sessão e o
+    // app entra sozinho no onboarding — não tem o que avisar. Com a confirmação
+    // ligada, vem sessão nula e o usuário precisa mesmo passar pelo e-mail.
+    if (!data.session) {
+      Alert.alert('Confirme seu e-mail', 'Enviamos um link de confirmação. Depois é só entrar.');
+    }
   }
 
   async function entrar() {
