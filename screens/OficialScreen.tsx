@@ -4,16 +4,37 @@ import { supabase } from '../lib/supabase';
 import { useMeuCondominio } from '../lib/useMeuCondominio';
 import RegrasScreen from './RegrasScreen';
 
-type Aviso = { id: string; titulo: string; texto: string; fixado: boolean; criado_em: string };
-type Votacao = { id: string; titulo: string; descricao: string | null; opcoes: string[]; data_fim: string };
+type Aviso = {
+  id: string;
+  titulo: string;
+  texto: string;
+  fixado: boolean;
+  restrito: boolean;
+  criado_em: string;
+};
+type Votacao = {
+  id: string;
+  titulo: string;
+  descricao: string | null;
+  opcoes: string[];
+  restrito: boolean;
+  data_fim: string;
+};
 type Reuniao = {
   id: string;
   titulo: string;
   data_hora: string;
   local: string | null;
   pauta: string | null;
+  restrito: boolean;
   cancelada_em: string | null;
 };
+
+// O item restrito só chega aqui pra quem a policy deixa ver — a etiqueta
+// existe pra quem VÊ saber que o vizinho não está vendo.
+function SeloRestrito() {
+  return <Text style={styles.tagRestrito}>🔒 restrito ao gabinete</Text>;
+}
 
 export default function OficialScreen() {
   const { unidadeId, loading: carregandoVinculo, erro: erroVinculo } = useMeuCondominio();
@@ -32,7 +53,7 @@ export default function OficialScreen() {
   const carregar = useCallback(async () => {
     const { data: avisosData, error: erroAvisos } = await supabase
       .from('avisos')
-      .select('id, titulo, texto, fixado, criado_em')
+      .select('id, titulo, texto, fixado, restrito, criado_em')
       .order('fixado', { ascending: false })
       .order('criado_em', { ascending: false });
     if (erroAvisos) Alert.alert('Erro ao carregar avisos', erroAvisos.message);
@@ -40,7 +61,7 @@ export default function OficialScreen() {
 
     const { data: votacoesData, error: erroVotacoes } = await supabase
       .from('votacoes')
-      .select('id, titulo, descricao, opcoes, data_fim')
+      .select('id, titulo, descricao, opcoes, restrito, data_fim')
       .gt('data_fim', new Date().toISOString())
       .order('data_fim', { ascending: true });
     if (erroVotacoes) Alert.alert('Erro ao carregar votações', erroVotacoes.message);
@@ -59,7 +80,7 @@ export default function OficialScreen() {
 
     const { data: reunioesData, error: erroReunioes } = await supabase
       .from('reunioes')
-      .select('id, titulo, data_hora, local, pauta, cancelada_em')
+      .select('id, titulo, data_hora, local, pauta, restrito, cancelada_em')
       .order('data_hora', { ascending: true });
     if (erroReunioes) Alert.alert('Erro ao carregar reuniões', erroReunioes.message);
     setReunioes(reunioesData ?? []);
@@ -165,6 +186,7 @@ export default function OficialScreen() {
       {avisos.length === 0 && <Text style={styles.vazio}>Nenhum aviso no momento.</Text>}
       {avisos.map((a) => (
         <View key={a.id} style={[styles.card, a.fixado && styles.cardFixado]}>
+          {a.restrito && <SeloRestrito />}
           {a.fixado && <Text style={styles.tagFixado}>📌 fixado pelo síndico</Text>}
           <Text style={styles.titulo}>{a.titulo}</Text>
           <Text style={styles.texto}>{a.texto}</Text>
@@ -177,6 +199,7 @@ export default function OficialScreen() {
         const meuVoto = meusVotos[v.id];
         return (
           <View key={v.id} style={styles.card}>
+            {v.restrito && <SeloRestrito />}
             <Text style={styles.titulo}>{v.titulo}</Text>
             {v.descricao && <Text style={styles.texto}>{v.descricao}</Text>}
             <Text style={styles.meta}>Encerra em {new Date(v.data_fim).toLocaleDateString('pt-BR')}</Text>
@@ -205,6 +228,7 @@ export default function OficialScreen() {
         const cancelada = !!r.cancelada_em;
         return (
           <View key={r.id} style={styles.card}>
+            {r.restrito && <SeloRestrito />}
             {cancelada && <Text style={styles.tagCancelada}>reunião cancelada pelo síndico</Text>}
             <Text style={[styles.titulo, cancelada && styles.textoRiscado]}>{r.titulo}</Text>
             <Text style={styles.meta}>
@@ -238,6 +262,7 @@ const styles = StyleSheet.create({
   cardFixado: { borderLeftWidth: 4, borderLeftColor: '#C98A1F' },
   tagFixado: { fontSize: 10, color: '#C98A1F', textTransform: 'uppercase', fontWeight: '700', marginBottom: 4 },
   tagCancelada: { fontSize: 10, color: '#B6512E', textTransform: 'uppercase', fontWeight: '700', marginBottom: 4 },
+  tagRestrito: { fontSize: 10, color: '#7A4B8C', textTransform: 'uppercase', fontWeight: '700', marginBottom: 4 },
   textoRiscado: { textDecorationLine: 'line-through', color: '#6B665D' },
   titulo: { fontWeight: '700', fontSize: 15, color: '#211F1B' },
   texto: { fontSize: 13, color: '#6B665D', marginTop: 6, lineHeight: 19 },

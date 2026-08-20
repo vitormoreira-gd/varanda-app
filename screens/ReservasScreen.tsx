@@ -38,7 +38,7 @@ type Reserva = {
 };
 
 export default function ReservasScreen() {
-  const { condominioId, unidadeId, papel } = useMeuCondominio();
+  const { condominioId, unidadeId, podeGerir } = useMeuCondominio();
   const [userId, setUserId] = useState<string | null>(null);
   const [lista, setLista] = useState<Reserva[]>([]);
   const [dataEscolhida, setDataEscolhida] = useState<Date>(new Date());
@@ -47,7 +47,7 @@ export default function ReservasScreen() {
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const ehSindico = papel === 'sindico';
+  const ehSindico = podeGerir;
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));

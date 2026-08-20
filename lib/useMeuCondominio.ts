@@ -4,6 +4,11 @@ import { supabase } from './supabase';
 // Em que ponto do onboarding o usuário logado está.
 export type Situacao = 'sem_perfil' | 'sem_vinculo' | 'pendente' | 'aprovado';
 
+// Cargo no condomínio, guardado na tabela `cargos`. É separado de `papel`
+// (que é a relação com a unidade) de propósito: dá pra ser inquilino do 302
+// E subsíndico. O síndico continua vindo em `papel`, não aqui.
+export type Cargo = 'subsindico' | 'conselho';
+
 type VinculoBruto = {
   papel: string;
   status: string;
@@ -18,6 +23,7 @@ export function useMeuCondominio() {
   const [condominioId, setCondominioId] = useState<string | null>(null);
   const [unidadeId, setUnidadeId] = useState<string | null>(null);
   const [papel, setPapel] = useState<string | null>(null);
+  const [cargo, setCargo] = useState<Cargo | null>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -85,6 +91,22 @@ export function useMeuCondominio() {
       setUnidadeId(aprovado.unidade_id);
       setPapel(aprovado.papel);
       setSituacao('aprovado');
+
+      if (unidade?.condominio_id) {
+        const { data: cargoData, error: erroCargo } = await supabase
+          .from('cargos')
+          .select('cargo')
+          .eq('usuario_id', userId)
+          .eq('condominio_id', unidade.condominio_id)
+          .maybeSingle();
+
+        if (erroCargo) {
+          setErro(erroCargo.message);
+          setLoading(false);
+          return;
+        }
+        setCargo((cargoData?.cargo as Cargo) ?? null);
+      }
     } else {
       limparVinculo();
       setSituacao(lista.length > 0 ? 'pendente' : 'sem_vinculo');
@@ -97,7 +119,28 @@ export function useMeuCondominio() {
     setCondominioId(null);
     setUnidadeId(null);
     setPapel(null);
+    setCargo(null);
   }
 
-  return { situacao, nome, condominioId, unidadeId, papel, loading, erro, recarregar: carregar };
+  // Espelham pode_gerir() e pode_fiscalizar() do banco. A UI usa isso só pra
+  // esconder botão: quem manda é o RLS, e update bloqueado por RLS falha
+  // calado (armadilha nº4) — por isso esconder importa.
+  const ehSindico = papel === 'sindico';
+  const podeGerir = ehSindico || cargo === 'subsindico';
+  const podeFiscalizar = podeGerir || cargo === 'conselho';
+
+  return {
+    situacao,
+    nome,
+    condominioId,
+    unidadeId,
+    papel,
+    cargo,
+    ehSindico,
+    podeGerir,
+    podeFiscalizar,
+    loading,
+    erro,
+    recarregar: carregar,
+  };
 }

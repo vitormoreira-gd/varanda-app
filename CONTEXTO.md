@@ -11,7 +11,8 @@ Este arquivo existe pra dar contexto rápido a qualquer instância do Claude (ou
 ## Estado
 
 - **Tudo commitado**, working tree limpo, branch `main`, sem remote (só local).
-- **Todas as migrações aplicadas no Supabase e dobradas** dentro de `db/varanda-schema.sql`. Não há migração solta pendente. O `db/` tem só o schema e os snippets de teste.
+- **Há uma migração pendente de aplicar:** `db/migracao-cargos.sql` (subsíndico, conselho fiscal e canal restrito do Oficial). Rodar no SQL Editor do Supabase antes de abrir o app — sem ela nada de Gestão funciona, porque as policies de escrita passaram a chamar `pode_gerir()`. Já está dobrada dentro de `db/varanda-schema.sql`; depois de aplicada, apagar o arquivo.
+- As demais migrações estão todas aplicadas e dobradas no schema.
 - App rodando no celular via Expo Go. Nenhum emulador na máquina, e foi decidido continuar assim.
 
 ## O que ainda NÃO foi testado no celular
@@ -21,12 +22,13 @@ Escrito e com `npx tsc --noEmit` limpo, mas não exercitado com gente de verdade
 1. **Reserva do salão** — o fluxo completo: morador pede, síndico aprova, e um segundo pedido pra mesma data tem que cair na mensagem "Data indisponível" (vinda do erro 23505 dos índices parciais).
 2. **Arquivar sugestão/problema**, **cancelar reunião com aviso**, e o badge de **"aberto há X dias"** — implementados e com a migração aplicada, mas sem teste de tela.
 3. **Lista de condôminos** — conferir se o resumo do topo bate com a realidade do Aurora.
+4. **Subsíndico, conselho fiscal e canal restrito** — nada disso foi exercitado. O roteiro mínimo: dar subsíndico a alguém pela aba Condôminos e conferir que a Gestão dele abre inteira **menos** a possibilidade de dar cargo; dar conselho a outro e conferir que a Gestão dele abre em modo leitura, com a faixa âmbar e sem botão de status nem de arquivar; publicar um aviso restrito e conferir com uma terceira conta comum que ele **não** aparece. O teste que mais importa é o do vazamento pelos filhos: abrir uma votação restrita, votar como síndico, e confirmar que o morador comum não vê nem a votação nem os votos dela.
 
 ## Próximo passo
 
-Sobrou da **Fase 3** (ver Parte 4): relato confidencial em Problemas · subsíndico e conselho fiscal · troca de vaga de garagem.
+Sobrou da **Fase 3** (ver Parte 4): relato confidencial em Problemas · troca de vaga de garagem.
 
-Custo levantado em 20/08/2026, pra não recalcular: **relato confidencial** é o mais barato (uma coluna, reescrever a policy de select de `problemas` e herdar em `historico_status`, mais um toggle no formulário). **Subsíndico/conselho fiscal** é o mais caro e o mais arriscado — mexe em `eh_sindico()`, que sustenta as policies de escrita de quase toda tabela, e exige antes uma decisão de matriz de permissões. **Troca de vaga** são duas features empilhadas: o cadastro de vagas não existe.
+Custo levantado em 20/08/2026, pra não recalcular: **relato confidencial** é o mais barato (uma coluna, reescrever a policy de select de `problemas` e herdar em `historico_status`, mais um toggle no formulário) — e ficou ainda mais barato agora, porque `pode_fiscalizar()` já existe pra dizer quem enxerga o sigiloso e a lição dos filhos que não herdam visibilidade já está aprendida. **Troca de vaga** são duas features empilhadas: o cadastro de vagas não existe.
 
 Não escolher sozinho: o Vitor quer ser consultado antes de começar uma implementação, com as opções e o custo de cada uma. Depois de escolhido, tocar até o fim sem perguntar de novo.
 
@@ -74,11 +76,13 @@ varanda-app/
 ├── App.tsx                          — auth gate + tab navigator (mostra aba Gestão só se papel === 'sindico')
 ├── db/
 │   ├── varanda-schema.sql           — DDL completo, idempotente. FONTE DA VERDADE do banco.
+│   ├── migracao-cargos.sql          — PENDENTE de rodar no Supabase; apagar depois de aplicada
 │   └── snippets-teste.sql           — atalhos de SQL pro teste manual (não é migração)
 ├── lib/
 │   ├── supabase.ts                  — client Supabase configurado pra RN
 │   ├── datas.ts                     — formatarDataHora(), sem depender de Intl
-│   └── useMeuCondominio.ts          — hook: situacao do onboarding + condominioId, unidadeId, papel
+│   └── useMeuCondominio.ts          — hook: situacao do onboarding + condominioId, unidadeId,
+│                                        papel, cargo, ehSindico/podeGerir/podeFiscalizar
 ├── screens/
 │   ├── AuthScreen.tsx                — cadastro/login (só e-mail e senha)
 │   ├── EntradaScreen.tsx             — onboarding: perfil → convite ou fundação → espera aprovação
@@ -143,6 +147,14 @@ Regras do condomínio, **aplicada no Supabase em 20/08/2026** e já dobrada dent
 - Sem tabela de histórico de versões, de propósito: o rastro de cada alteração é o próprio aviso publicado, que já fica no Oficial. `versao` é um contador pro aviso citar.
 - Salvar com o texto idêntico ao já publicado devolve a versão atual, não incrementa e **não** dispara aviso — senão o síndico spamaria o prédio ao abrir e fechar a tela.
 
+Cargos (subsíndico e conselho fiscal) e canal restrito, **migração `db/migracao-cargos.sql` pendente de aplicar** e já dobrada dentro de `varanda-schema.sql`. É a mudança mais invasiva feita até hoje no banco — 21 policies reescritas:
+- tabela `cargos` (`condominio_id`, `usuario_id`, `cargo`, unique no par) e enum `cargo_condominio` com **apenas** `subsindico` e `conselho`. O síndico continua morando em `vinculos.papel`, de propósito: uma fonte de verdade por cargo, sem risco de o banco discordar de si mesmo sobre quem é síndico.
+- **Por que tabela separada e não estender o enum:** `vinculos.papel` mistura relação com a unidade (proprietário/inquilino) e cargo no condomínio (síndico) desde o schema original — um síndico que aluga aparece como `sindico` e a informação de que é inquilino se perde. Com `cargos` os dois convivem: dá pra ser inquilino do 302 **e** subsíndico.
+- Três funções novas em cima de `eh_sindico()`, que continua existindo: `tem_cargo(condominio, cargos[])`, **`pode_gerir()`** (síndico ou subsíndico — escrita) e **`pode_fiscalizar()`** (os dois mais o conselho — leitura ampliada). As policies de escrita trocaram `eh_sindico()` por `pode_gerir()`.
+- **`eh_sindico()` sobrou em exatamente um lugar: as policies da própria tabela `cargos`.** Atribuir cargo é o único poder que o subsíndico não herda, mesmo tendo herdado governança — sem isso ele se promoveria sozinho e não haveria caminho de volta.
+- `restrito boolean` em `avisos`, `votacoes` e `reunioes`: o canal do gabinete. A policy de select vira `condominio_id in (...) and (not restrito or pode_fiscalizar(condominio_id))`.
+- **Armadilha nova, e a mais importante desta leva:** as policies de `votos`, `rsvps`, `curtidas` e `comentarios` reconferiam só o condomínio do pai, nunca a visibilidade dele. Sem repetir a cláusula de `restrito` dentro delas, o vizinho não veria a votação restrita mas leria os votos dela. Foram reescritas junto — e o mesmo cuidado vale pra qualquer restrição futura (relato confidencial vai cair exatamente aqui).
+
 **Sobre `telefone` e `foto_url` (era decisão em aberto, resolvida em 20/08/2026):** RLS é por linha, não por coluna, então a policy que deixa o vizinho ver seu `nome` libera a linha inteira de `usuarios` — telefone e foto junto. Mas ao implementar a lista de condôminos ficou claro que **nenhuma tela do app lê ou escreve essas duas colunas**: são colunas mortas desde o schema original, e não há telefone nenhum no banco pra vazar. A exposição é teórica.
 
 Fica registrado pra quando deixar de ser: **no dia em que existir cadastro de telefone, mover contato pra tabela separada com policy própria** — a lista de condôminos já está preparada, ela não exibe contato hoje.
@@ -156,7 +168,8 @@ Fica registrado pra quando deixar de ser: **no dia em que existir cadastro de te
 5. **Select em `vinculos` devolve o condomínio inteiro pra síndico** — a policy "sindico ve vinculos do condominio" soma-se à de "vê os próprios". Então `from('vinculos').select(...)` sem `.eq('usuario_id', ...)` traz os vínculos de todos os moradores quando quem pergunta é síndico. Com `.maybeSingle()` isso vira erro de "mais de uma linha" no momento em que o segundo morador é aprovado — o app do síndico quebrava inteiro. Sempre filtrar por `usuario_id` quando a pergunta é "qual é o MEU vínculo".
 6. **PowerShell bloqueando `npx`**: usar `cmd` em vez de PowerShell, ou `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` como admin.
 7. **`toISOString()` em coluna `date`**: converte pra UTC, então à noite no Brasil (UTC-3) a data pula pro dia seguinte — uma reserva pedida dia 20 às 22h viraria dia 21. Usar `paraDataISO()` de `lib/datas.ts`, que monta `YYYY-MM-DD` a partir dos componentes locais. Mesmo cuidado ao ler: `formatarDataCurta()` não passa por `Date` com fuso.
-8. **`.env` do Expo**: variáveis precisam do prefixo `EXPO_PUBLIC_` pra chegar no client. Mudança no `.env` só é lida reiniciando o servidor (`npx expo start -c`).
+8. **Filho não herda visibilidade do pai em RLS.** As policies de `votos`, `rsvps`, `curtidas` e `comentarios` são do tipo `pai_id in (select id from pai where condominio_id in (...))` — elas reconferem o *condomínio*, não se você pode ver aquele pai. Toda vez que uma restrição nova entrar no pai (restrito, confidencial, o que for), a mesma cláusula precisa ser repetida nas policies dos filhos, senão o conteúdo vaza pela borda: a votação some da tela e os votos dela continuam legíveis.
+9. **`.env` do Expo**: variáveis precisam do prefixo `EXPO_PUBLIC_` pra chegar no client. Mudança no `.env` só é lida reiniciando o servidor (`npx expo start -c`).
 
 ## Status atual
 
@@ -179,6 +192,7 @@ Corrigido nesta sessão:
 - **Lista de condôminos** (fecha a Fase 2 do roadmap): quem entrou, unidade por unidade, com resumo de adesão no topo — % de unidades ocupadas é o embrião da métrica que o trial vai precisar.
 - **Tempo em aberto nos Problemas, arquivar solicitações e cancelar reunião** — migração aplicada e dobrada no schema.
 - **Regras do condomínio** (Fase 3): leitura no topo do Oficial (card que expande, com versão e quem atualizou), edição em Gestão › Regras, e o aviso automático garantido pelo RPC. Migração aplicada e exercitada no celular ainda nesta sessão.
+- **Subsíndico, conselho fiscal e canal restrito do Oficial** (Fase 3): decisão do Vitor de dar ao subsíndico os quatro blocos de poder, inclusive governança, reservando só a atribuição de cargo ao síndico. Conselho fiscal entra como leitura ampliada — a Gestão dele abre com faixa "somente leitura" e o `ModerarScreen` ganhou `somenteLeitura`, que troca os botões de status por etiqueta. **Migração ainda não aplicada.**
 
 Ambiente: decidido em 20/08/2026 continuar testando **só no celular**. Não há SDK Android na máquina (os quatro Unity instalados estão sem o módulo AndroidPlayer), e emulador custaria ~10 GB. Expo Web foi descartado porque `react-native-web` não implementa `Alert`, e este app usa `Alert.alert` para todo feedback de erro e toda confirmação destrutiva — testar lá esconderia justamente a classe de bug mais comum aqui. O emulador só passa a valer quando a dor for testar síndico e morador lado a lado.
 
@@ -242,8 +256,9 @@ O nó técnico: o primeiro síndico é um paradoxo igual ao do `vincular_por_cod
 - [ ] Solicitação de troca de vaga entre condôminos (pedir, aceitar/recusar, histórico de trocas)
 
 ### Papéis
-- [ ] Função de subsíndico — permissões parciais de síndico
-- [ ] Função de conselho fiscal — outro nível de acesso intermediário
+- [x] Função de subsíndico — decisão de 20/08/2026: herda os **quatro** blocos (moderação, solicitações, comunicação oficial e governança). Na prática é síndico com um freio só: não atribui cargo. Foi escolha consciente do Vitor depois de eu apontar que isso apaga boa parte da diferença entre os dois
+- [x] Função de conselho fiscal — criado como **leitura ampliada**: vê a lista de condôminos e o andamento das solicitações, sem escrever nada. Registrado que hoje ele não tem o que fiscalizar de fato — o cargo existe pra vigiar contas, e prestação de contas é Fase 4. Quando ela chegar, é aqui que o cargo ganha função de verdade
+- [x] Canal restrito ao gabinete — aviso, votação e reunião com flag `restrito`, visíveis só a quem `pode_fiscalizar()`. Pedido do Vitor no meio da implementação de cargos
 
 ### Infraestrutura
 - [ ] Push notifications (avisos, votação aberta, reunião marcada, resposta no feed etc. chegando como notificação, não só ao abrir o app)
@@ -407,7 +422,7 @@ MVP completo e em uso num condomínio real. Um condomínio novo entra sozinho, s
 
 - ~~Reserva de salão~~ **FEITO**
 - ~~Regras do condomínio editáveis, com aviso automático quando mudarem~~ **FEITO**
-- Subsíndico e conselho fiscal (permissões intermediárias)
+- ~~Subsíndico e conselho fiscal (permissões intermediárias)~~ **FEITO** — junto com o canal restrito do Oficial
 - Troca de vaga de garagem entre condôminos
 - Relato confidencial em Problemas (visível só ao síndico), separado do relato público
 

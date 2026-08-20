@@ -44,7 +44,7 @@ export default function App() {
 }
 
 function AppLogado({ session }: { session: Session }) {
-  const { situacao, papel, loading, recarregar } = useMeuCondominio();
+  const { situacao, podeFiscalizar, loading, recarregar } = useMeuCondominio();
 
   if (loading) {
     return (
@@ -72,7 +72,7 @@ function AppLogado({ session }: { session: Session }) {
         <Tab.Screen name="Mural" component={MuralScreen} />
         <Tab.Screen name="Oficial" component={OficialScreen} />
         <Tab.Screen name="Solicitações" component={SolicitacoesScreen} />
-        {papel === 'sindico' && <Tab.Screen name="Gestão" component={GestaoScreen} />}
+        {podeFiscalizar && <Tab.Screen name="Gestão" component={GestaoScreen} />}
         <Tab.Screen name="Perfil">
           {() => <PerfilScreen session={session} />}
         </Tab.Screen>

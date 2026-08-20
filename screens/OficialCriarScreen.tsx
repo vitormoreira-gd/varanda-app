@@ -14,11 +14,43 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { supabase } from '../lib/supabase';
 import { useMeuCondominio } from '../lib/useMeuCondominio';
 
+/**
+ * Marca um item do Oficial como visível só pro gabinete (síndico, subsíndico
+ * e conselho fiscal). Quem manda é a policy: `not restrito or
+ * pode_fiscalizar(...)`, repetida também em votos e rsvps — os filhos não
+ * herdam a visibilidade do pai sozinhos.
+ */
+function RestritoCheckbox({
+  restrito,
+  setRestrito,
+  oQue,
+}: {
+  restrito: boolean;
+  setRestrito: (v: boolean) => void;
+  oQue: string;
+}) {
+  return (
+    <>
+      <Pressable style={styles.checkboxRow} onPress={() => setRestrito(!restrito)}>
+        <View style={[styles.checkbox, restrito && styles.checkboxRestrito]} />
+        <Text style={styles.checkboxLabel}>Restrito ao gabinete</Text>
+      </Pressable>
+      {restrito && (
+        <Text style={styles.restritoDica}>
+          Só você, o subsíndico e o conselho fiscal veem {oQue}. Os demais moradores não
+          ficam sabendo que existe.
+        </Text>
+      )}
+    </>
+  );
+}
+
 export function CriarAvisoForm() {
   const { condominioId } = useMeuCondominio();
   const [titulo, setTitulo] = useState('');
   const [texto, setTexto] = useState('');
   const [fixado, setFixado] = useState(true);
+  const [restrito, setRestrito] = useState(false);
 
   async function enviar() {
     if (!titulo.trim() || !texto.trim() || !condominioId) return;
@@ -28,6 +60,7 @@ export function CriarAvisoForm() {
       titulo: titulo.trim(),
       texto: texto.trim(),
       fixado,
+      restrito,
       condominio_id: condominioId,
       autor_id: userData.user?.id,
     });
@@ -55,6 +88,7 @@ export function CriarAvisoForm() {
         <View style={[styles.checkbox, fixado && styles.checkboxAtivo]} />
         <Text style={styles.checkboxLabel}>Fixar no topo do Mural/Oficial</Text>
       </Pressable>
+      <RestritoCheckbox restrito={restrito} setRestrito={setRestrito} oQue="este aviso" />
       <Button title="Publicar aviso" onPress={enviar} />
     </View>
   );
@@ -66,6 +100,7 @@ export function CriarVotacaoForm() {
   const [descricao, setDescricao] = useState('');
   const [opcoes, setOpcoes] = useState(['Sim', 'Não']);
   const [dias, setDias] = useState('7');
+  const [restrito, setRestrito] = useState(false);
 
   function atualizarOpcao(i: number, valor: string) {
     const novas = [...opcoes];
@@ -92,6 +127,7 @@ export function CriarVotacaoForm() {
       descricao: descricao.trim() || null,
       opcoes: opcoesValidas,
       data_fim: dataFim.toISOString(),
+      restrito,
       condominio_id: condominioId,
       autor_id: userData.user?.id,
     });
@@ -133,6 +169,7 @@ export function CriarVotacaoForm() {
         value={dias}
         onChangeText={setDias}
       />
+      <RestritoCheckbox restrito={restrito} setRestrito={setRestrito} oQue="esta votação" />
       <Button title="Abrir votação" onPress={enviar} />
     </View>
   );
@@ -157,6 +194,7 @@ export function CriarReuniaoForm() {
   const [horario, setHorario] = useState('19:00');
   const [local, setLocal] = useState('');
   const [pauta, setPauta] = useState('');
+  const [restrito, setRestrito] = useState(false);
 
   function onChangeData(event: DateTimePickerEvent, selecionada?: Date) {
     if (Platform.OS === 'android') setMostrarCalendario(false);
@@ -177,6 +215,7 @@ export function CriarReuniaoForm() {
       data_hora: dataHora.toISOString(),
       local: local.trim() || null,
       pauta: pauta.trim() || null,
+      restrito,
       condominio_id: condominioId,
       autor_id: userData.user?.id,
     });
@@ -240,6 +279,7 @@ export function CriarReuniaoForm() {
         onChangeText={setPauta}
         multiline
       />
+      <RestritoCheckbox restrito={restrito} setRestrito={setRestrito} oQue="esta reunião" />
       <Button title="Agendar reunião" onPress={enviar} />
     </View>
   );
@@ -407,7 +447,9 @@ const styles = StyleSheet.create({
   checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 },
   checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: '#E4DFD2' },
   checkboxAtivo: { backgroundColor: '#1B4B66', borderColor: '#1B4B66' },
+  checkboxRestrito: { backgroundColor: '#7A4B8C', borderColor: '#7A4B8C' },
   checkboxLabel: { fontSize: 13, color: '#211F1B' },
+  restritoDica: { fontSize: 11, color: '#7A4B8C', lineHeight: 16, marginBottom: 6 },
   dataBtn: {
     borderWidth: 1,
     borderColor: '#E4DFD2',

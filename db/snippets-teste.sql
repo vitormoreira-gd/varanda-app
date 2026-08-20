@@ -33,6 +33,28 @@ update vinculos set status = 'aprovado' where status = 'pendente';
 -- where usuario_id = (select id from auth.users where email = 'teste@exemplo.com');
 
 -- ------------------------------------------------------------
+-- DAR CARGO (subsíndico / conselho fiscal)
+-- No app isso é feito tocando no morador na aba Condôminos; aqui é o
+-- atalho pra testar sem precisar entrar como síndico.
+-- ------------------------------------------------------------
+-- insert into cargos (condominio_id, usuario_id, cargo)
+-- select un.condominio_id, v.usuario_id, 'subsindico'
+-- from vinculos v
+-- join unidades un on un.id = v.unidade_id
+-- where v.usuario_id = (select id from auth.users where email = 'teste@exemplo.com')
+-- on conflict (condominio_id, usuario_id) do update set cargo = excluded.cargo;
+
+-- Ver quem tem cargo hoje:
+-- select u.nome, c.cargo, cond.nome as condominio
+-- from cargos c
+-- join usuarios u on u.id = c.usuario_id
+-- join condominios cond on cond.id = c.condominio_id;
+
+-- Tirar o cargo:
+-- delete from cargos
+-- where usuario_id = (select id from auth.users where email = 'teste@exemplo.com');
+
+-- ------------------------------------------------------------
 -- CÓDIGOS DE FUNDAÇÃO
 -- ------------------------------------------------------------
 -- Emitir um novo:

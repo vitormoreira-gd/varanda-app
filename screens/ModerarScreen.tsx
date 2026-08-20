@@ -16,7 +16,13 @@ const PROBLEMA_LABEL: Record<string, string> = {
   resolvido: 'Resolvido',
 };
 
-export default function ModerarScreen({ tipo }: { tipo: 'sugestoes' | 'problemas' }) {
+export default function ModerarScreen({
+  tipo,
+  somenteLeitura = false,
+}: {
+  tipo: 'sugestoes' | 'problemas';
+  somenteLeitura?: boolean;
+}) {
   const [lista, setLista] = useState<any[]>([]);
   const [verArquivados, setVerArquivados] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -134,23 +140,37 @@ export default function ModerarScreen({ tipo }: { tipo: 'sugestoes' | 'problemas
               )}
               {tipo === 'sugestoes' && <Text style={styles.descricao}>{item.descricao}</Text>}
 
-              <View style={styles.opcoes}>
-                {opcoes.map((s) => (
-                  <Pressable
-                    key={s}
-                    onPress={() => mudarStatus(item.id, s)}
-                    style={[styles.opcao, item.status === s && styles.opcaoAtiva]}
-                  >
-                    <Text style={[styles.opcaoTexto, item.status === s && styles.opcaoTextoAtiva]}>
-                      {labels[s]}
+              {/* Sem permissão de escrita o status vira etiqueta, não botão:
+                  o RLS recusaria o update e a recusa não gera erro visível. */}
+              {somenteLeitura ? (
+                <View style={styles.opcoes}>
+                  <View style={[styles.opcao, styles.opcaoAtiva]}>
+                    <Text style={[styles.opcaoTexto, styles.opcaoTextoAtiva]}>
+                      {labels[item.status]}
                     </Text>
-                  </Pressable>
-                ))}
-              </View>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.opcoes}>
+                  {opcoes.map((s) => (
+                    <Pressable
+                      key={s}
+                      onPress={() => mudarStatus(item.id, s)}
+                      style={[styles.opcao, item.status === s && styles.opcaoAtiva]}
+                    >
+                      <Text style={[styles.opcaoTexto, item.status === s && styles.opcaoTextoAtiva]}>
+                        {labels[s]}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
 
-              <Pressable onPress={() => alternarArquivo(item.id, arquivado)} hitSlop={6}>
-                <Text style={styles.arquivar}>{arquivado ? 'Desarquivar' : 'Arquivar'}</Text>
-              </Pressable>
+              {!somenteLeitura && (
+                <Pressable onPress={() => alternarArquivo(item.id, arquivado)} hitSlop={6}>
+                  <Text style={styles.arquivar}>{arquivado ? 'Desarquivar' : 'Arquivar'}</Text>
+                </Pressable>
+              )}
             </View>
           );
         }}

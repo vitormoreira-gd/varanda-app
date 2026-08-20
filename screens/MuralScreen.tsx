@@ -31,14 +31,14 @@ type Post = {
 };
 
 export default function MuralScreen() {
-  const { condominioId, papel, loading: carregandoCondominio, erro: erroCondominio } = useMeuCondominio();
+  const { condominioId, podeGerir, loading: carregandoCondominio, erro: erroCondominio } = useMeuCondominio();
   const [posts, setPosts] = useState<Post[]>([]);
   const [texto, setTexto] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
 
-  const ehSindico = papel === 'sindico';
+  const ehSindico = podeGerir;
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));

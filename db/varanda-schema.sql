@@ -27,6 +27,13 @@ do $$ begin
   create type status_reserva as enum ('pendente', 'aprovada', 'recusada');
 exception when duplicate_object then null; end $$;
 
+-- Cargo no condominio, separado da relacao com a unidade. Nao tem 'sindico'
+-- de proposito: o sindico continua vivendo em vinculos.papel, uma fonte de
+-- verdade por cargo.
+do $$ begin
+  create type cargo_condominio as enum ('subsindico', 'conselho');
+exception when duplicate_object then null; end $$;
+
 -- ---------- CONDOMÍNIO E UNIDADES ----------
 create table if not exists condominios (
   id uuid primary key default uuid_generate_v4(),
@@ -158,6 +165,8 @@ create table if not exists avisos (
   titulo text not null,
   texto text not null,
   fixado boolean not null default true,
+  -- restrito: so sindico, subsindico e conselho enxergam. O canal do gabinete.
+  restrito boolean not null default false,
   data_expiracao timestamptz,
   criado_em timestamptz not null default now()
 );
@@ -170,6 +179,7 @@ create table if not exists votacoes (
   titulo text not null,
   descricao text,
   opcoes text[] not null,
+  restrito boolean not null default false,
   data_inicio timestamptz not null default now(),
   data_fim timestamptz not null
 );
@@ -197,6 +207,7 @@ create table if not exists reunioes (
   -- que foi cancelada. Apagar a linha faria a reuniao sumir em silencio.
   cancelada_em timestamptz,
   motivo_cancelamento text,
+  restrito boolean not null default false,
   criado_em timestamptz not null default now()
 );
 
@@ -249,6 +260,21 @@ create table if not exists regras (
   atualizado_em timestamptz not null default now()
 );
 
+-- ---------- CARGOS (subsindico e conselho fiscal) ----------
+-- `vinculos.papel` mistura relacao com a unidade (proprietario/inquilino) e
+-- cargo no condominio (sindico) desde o schema original: um sindico que
+-- aluga aparece como 'sindico' e a informacao de que e inquilino se perde.
+-- Aqui os dois convivem — da pra ser inquilino do 302 E subsindico.
+create table if not exists cargos (
+  id uuid primary key default uuid_generate_v4(),
+  condominio_id uuid not null references condominios(id) on delete cascade,
+  usuario_id uuid not null references usuarios(id) on delete cascade,
+  cargo cargo_condominio not null,
+  atribuido_por uuid references usuarios(id),
+  criado_em timestamptz not null default now(),
+  unique (condominio_id, usuario_id)
+);
+
 -- ============================================================
 -- FUNÇÕES AUXILIARES (create or replace já é seguro pra repetir)
 -- ============================================================
@@ -281,6 +307,69 @@ as $$
       and u.condominio_id = p_condominio_id
   );
 $$;
+
+-- Security definer pra não depender da policy de vinculos: a checagem
+-- precisa valer mesmo pra quem não enxerga o vínculo do outro.
+create or replace function mora_no_condominio(p_usuario_id uuid, p_condominio_id uuid)
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select exists (
+    select 1
+    from vinculos v
+    join unidades u on u.id = v.unidade_id
+    where v.usuario_id = p_usuario_id
+      and v.status = 'aprovado'
+      and u.condominio_id = p_condominio_id
+  );
+$$;
+
+create or replace function tem_cargo(p_condominio_id uuid, p_cargos cargo_condominio[])
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select exists (
+    select 1
+    from cargos c
+    where c.usuario_id = auth.uid()
+      and c.condominio_id = p_condominio_id
+      and c.cargo = any(p_cargos)
+  );
+$$;
+
+-- Quem escreve: síndico e subsíndico. Substitui eh_sindico() em todas as
+-- policies de escrita — eh_sindico() continua existindo e só é usada onde o
+-- poder é exclusivo do síndico (atribuir cargo).
+create or replace function pode_gerir(p_condominio_id uuid)
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select eh_sindico(p_condominio_id)
+      or tem_cargo(p_condominio_id, array['subsindico']::cargo_condominio[]);
+$$;
+
+-- Quem tem leitura ampliada: os dois acima mais o conselho fiscal. É também
+-- a audiência do canal restrito do Oficial.
+create or replace function pode_fiscalizar(p_condominio_id uuid)
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select pode_gerir(p_condominio_id)
+      or tem_cargo(p_condominio_id, array['conselho']::cargo_condominio[]);
+$$;
+
+grant execute on function mora_no_condominio(uuid, uuid) to authenticated;
+grant execute on function tem_cargo(uuid, cargo_condominio[]) to authenticated;
+grant execute on function pode_gerir(uuid) to authenticated;
+grant execute on function pode_fiscalizar(uuid) to authenticated;
 
 -- Quem sao os usuarios que dividem condominio comigo. Security definer
 -- pra evitar recursao de RLS: vinculos tem policy propria e seria
@@ -323,6 +412,7 @@ alter table rsvps enable row level security;
 alter table codigos_fundacao enable row level security;
 alter table reservas enable row level security;
 alter table regras enable row level security;
+alter table cargos enable row level security;
 
 drop policy if exists "usuario ve proprio perfil" on usuarios;
 create policy "usuario ve proprio perfil" on usuarios
@@ -356,13 +446,13 @@ create policy "usuario solicita vinculo" on vinculos
 drop policy if exists "sindico ve vinculos do condominio" on vinculos;
 create policy "sindico ve vinculos do condominio" on vinculos
   for select using (
-    eh_sindico((select condominio_id from unidades where id = unidade_id))
+    pode_fiscalizar((select condominio_id from unidades where id = unidade_id))
   );
 
 drop policy if exists "sindico aprova vinculo" on vinculos;
 create policy "sindico aprova vinculo" on vinculos
   for update using (
-    eh_sindico((select condominio_id from unidades where id = unidade_id))
+    pode_gerir((select condominio_id from unidades where id = unidade_id))
   );
 
 drop policy if exists "ver posts do meu condominio" on posts;
@@ -413,7 +503,7 @@ create policy "criar sugestao" on sugestoes
 
 drop policy if exists "sindico atualiza status da sugestao" on sugestoes;
 create policy "sindico atualiza status da sugestao" on sugestoes
-  for update using (eh_sindico(condominio_id));
+  for update using (pode_gerir(condominio_id));
 
 drop policy if exists "ver apoios" on apoios;
 create policy "ver apoios" on apoios
@@ -442,7 +532,7 @@ create policy "relatar problema" on problemas
 
 drop policy if exists "sindico atualiza status do problema" on problemas;
 create policy "sindico atualiza status do problema" on problemas
-  for update using (eh_sindico(condominio_id));
+  for update using (pode_gerir(condominio_id));
 
 drop policy if exists "ver historico" on historico_status;
 create policy "ver historico" on historico_status
@@ -453,33 +543,43 @@ create policy "ver historico" on historico_status
 drop policy if exists "sindico registra historico" on historico_status;
 create policy "sindico registra historico" on historico_status
   for insert with check (
-    problema_id in (select id from problemas where eh_sindico(condominio_id))
+    problema_id in (select id from problemas where pode_gerir(condominio_id))
   );
 
 drop policy if exists "ver avisos do meu condominio" on avisos;
 create policy "ver avisos do meu condominio" on avisos
-  for select using (condominio_id in (select condominios_do_usuario()));
+  for select using (
+    condominio_id in (select condominios_do_usuario())
+    and (not restrito or pode_fiscalizar(condominio_id))
+  );
 
 drop policy if exists "sindico cria aviso" on avisos;
 create policy "sindico cria aviso" on avisos
-  for insert with check (eh_sindico(condominio_id) and autor_id = auth.uid());
+  for insert with check (pode_gerir(condominio_id) and autor_id = auth.uid());
 
 drop policy if exists "sindico edita aviso" on avisos;
 create policy "sindico edita aviso" on avisos
-  for update using (eh_sindico(condominio_id));
+  for update using (pode_gerir(condominio_id));
 
 drop policy if exists "ver votacoes do meu condominio" on votacoes;
 create policy "ver votacoes do meu condominio" on votacoes
-  for select using (condominio_id in (select condominios_do_usuario()));
+  for select using (
+    condominio_id in (select condominios_do_usuario())
+    and (not restrito or pode_fiscalizar(condominio_id))
+  );
 
 drop policy if exists "sindico cria votacao" on votacoes;
 create policy "sindico cria votacao" on votacoes
-  for insert with check (eh_sindico(condominio_id) and autor_id = auth.uid());
+  for insert with check (pode_gerir(condominio_id) and autor_id = auth.uid());
 
 drop policy if exists "ver votos do meu condominio" on votos;
 create policy "ver votos do meu condominio" on votos
   for select using (
-    votacao_id in (select id from votacoes where condominio_id in (select condominios_do_usuario()))
+    votacao_id in (
+      select id from votacoes
+      where condominio_id in (select condominios_do_usuario())
+        and (not restrito or pode_fiscalizar(condominio_id))
+    )
   );
 
 drop policy if exists "registrar voto" on votos;
@@ -490,30 +590,49 @@ create policy "registrar voto" on votos
       select unidade_id from vinculos
       where usuario_id = auth.uid() and status = 'aprovado'
     )
+    and votacao_id in (
+      select id from votacoes
+      where condominio_id in (select condominios_do_usuario())
+        and (not restrito or pode_fiscalizar(condominio_id))
+    )
   );
 
 drop policy if exists "ver reunioes do meu condominio" on reunioes;
 create policy "ver reunioes do meu condominio" on reunioes
-  for select using (condominio_id in (select condominios_do_usuario()));
+  for select using (
+    condominio_id in (select condominios_do_usuario())
+    and (not restrito or pode_fiscalizar(condominio_id))
+  );
 
 drop policy if exists "sindico cria reuniao" on reunioes;
 create policy "sindico cria reuniao" on reunioes
-  for insert with check (eh_sindico(condominio_id) and autor_id = auth.uid());
+  for insert with check (pode_gerir(condominio_id) and autor_id = auth.uid());
 
 -- reunioes tinha select e insert; o update entrou junto do cancelamento.
 drop policy if exists "sindico edita reuniao" on reunioes;
 create policy "sindico edita reuniao" on reunioes
-  for update using (eh_sindico(condominio_id));
+  for update using (pode_gerir(condominio_id));
 
 drop policy if exists "ver rsvps" on rsvps;
 create policy "ver rsvps" on rsvps
   for select using (
-    reuniao_id in (select id from reunioes where condominio_id in (select condominios_do_usuario()))
+    reuniao_id in (
+      select id from reunioes
+      where condominio_id in (select condominios_do_usuario())
+        and (not restrito or pode_fiscalizar(condominio_id))
+    )
   );
 
 drop policy if exists "confirmar presenca" on rsvps;
 create policy "confirmar presenca" on rsvps
-  for insert with check (usuario_id = auth.uid());
+  for insert with check (
+    usuario_id = auth.uid()
+    and reuniao_id in (
+      select id from reunioes
+      where condominio_id in (select condominios_do_usuario())
+        and (not restrito or pode_fiscalizar(condominio_id))
+    )
+  );
 
 drop policy if exists "desmarcar presenca" on rsvps;
 create policy "desmarcar presenca" on rsvps
@@ -538,7 +657,7 @@ create policy "pedir reserva" on reservas
 
 drop policy if exists "sindico decide reserva" on reservas;
 create policy "sindico decide reserva" on reservas
-  for update using (eh_sindico(condominio_id));
+  for update using (pode_gerir(condominio_id));
 
 -- O morador desiste do próprio pedido. O síndico não apaga: ele recusa,
 -- e a recusa fica registrada.
@@ -556,21 +675,49 @@ create policy "ver unidades do meu condominio" on unidades
 
 -- Insert direto com policy resolve o cadastro de unidades pelo síndico —
 -- não precisa de RPC, porque aqui o condominio_id já existe e
--- eh_sindico() já funciona.
+-- pode_gerir() já funciona.
 drop policy if exists "sindico cria unidade" on unidades;
 create policy "sindico cria unidade" on unidades
-  for insert with check (eh_sindico(condominio_id));
+  for insert with check (pode_gerir(condominio_id));
 
 -- NOVO: síndico pode remover post/comentário do feed (moderação)
 drop policy if exists "sindico modera posts" on posts;
 create policy "sindico modera posts" on posts
-  for delete using (eh_sindico(condominio_id));
+  for delete using (pode_gerir(condominio_id));
 
 drop policy if exists "sindico modera comentarios" on comentarios;
 create policy "sindico modera comentarios" on comentarios
   for delete using (
-    post_id in (select id from posts where eh_sindico(condominio_id))
+    post_id in (select id from posts where pode_gerir(condominio_id))
   );
+
+-- Todo mundo do condomínio vê quem é subsíndico e quem é conselho: cargo
+-- oculto é o tipo de coisa que gera desconfiança em assembleia.
+drop policy if exists "ver cargos do meu condominio" on cargos;
+create policy "ver cargos do meu condominio" on cargos
+  for select using (condominio_id in (select condominios_do_usuario()));
+
+-- Atribuir cargo é o ÚNICO poder que fica exclusivo do síndico, mesmo com o
+-- subsíndico herdando governança. Sem isso um subsíndico se promoveria (ou
+-- promoveria terceiros) e não haveria caminho de volta.
+drop policy if exists "sindico atribui cargo" on cargos;
+create policy "sindico atribui cargo" on cargos
+  for insert with check (
+    eh_sindico(condominio_id)
+    and mora_no_condominio(usuario_id, condominio_id)
+  );
+
+drop policy if exists "sindico troca cargo" on cargos;
+create policy "sindico troca cargo" on cargos
+  for update using (eh_sindico(condominio_id))
+  with check (
+    eh_sindico(condominio_id)
+    and mora_no_condominio(usuario_id, condominio_id)
+  );
+
+drop policy if exists "sindico remove cargo" on cargos;
+create policy "sindico remove cargo" on cargos
+  for delete using (eh_sindico(condominio_id));
 
 -- Regras têm SÓ policy de leitura, de propósito: escrever é sempre pelo RPC
 -- salvar_regras, que publica o aviso na mesma transação. Sem policy de
@@ -698,8 +845,8 @@ declare
   v_texto_atual text;
   v_versao int;
 begin
-  if not eh_sindico(p_condominio_id) then
-    raise exception 'Só o síndico pode editar as regras do condomínio';
+  if not pode_gerir(p_condominio_id) then
+    raise exception 'Só o síndico ou o subsíndico podem editar as regras';
   end if;
 
   if coalesce(trim(p_texto), '') = '' then

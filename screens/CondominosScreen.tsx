@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Alert, RefreshControl } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Alert, Pressable, RefreshControl } from 'react-native';
 import { supabase } from '../lib/supabase';
-import { useMeuCondominio } from '../lib/useMeuCondominio';
+import { useMeuCondominio, Cargo } from '../lib/useMeuCondominio';
 
 const PAPEL_LABEL: Record<string, string> = {
   proprietario: 'proprietário',
   inquilino: 'inquilino',
   sindico: 'síndico',
+};
+
+const CARGO_LABEL: Record<Cargo, string> = {
+  subsindico: 'subsíndico',
+  conselho: 'conselho fiscal',
 };
 
 type Unidade = { id: string; bloco: string | null; numero: string };
@@ -27,8 +32,9 @@ type LinhaUnidade = Unidade & { moradores: Morador[] };
  * da tela — é a lista de quem precisa receber o convite de novo.
  */
 export default function CondominosScreen() {
-  const { condominioId } = useMeuCondominio();
+  const { condominioId, ehSindico } = useMeuCondominio();
   const [linhas, setLinhas] = useState<LinhaUnidade[]>([]);
+  const [cargos, setCargos] = useState<Record<string, Cargo>>({});
   const [refreshing, setRefreshing] = useState(false);
 
   const carregar = useCallback(async () => {
@@ -76,6 +82,20 @@ export default function CondominosScreen() {
     });
 
     setLinhas(lista);
+
+    const { data: cargosData, error: erroCargos } = await supabase
+      .from('cargos')
+      .select('usuario_id, cargo')
+      .eq('condominio_id', condominioId);
+
+    if (erroCargos) {
+      Alert.alert('Erro ao carregar cargos', erroCargos.message);
+      return;
+    }
+
+    const mapa: Record<string, Cargo> = {};
+    (cargosData ?? []).forEach((c) => (mapa[c.usuario_id] = c.cargo as Cargo));
+    setCargos(mapa);
   }, [condominioId]);
 
   useEffect(() => {
@@ -86,6 +106,100 @@ export default function CondominosScreen() {
     setRefreshing(true);
     await carregar();
     setRefreshing(false);
+  }
+
+  // Atribuir cargo é o único poder que o subsíndico NÃO herda, mesmo tendo
+  // herdado governança: sem isso ele se promoveria sozinho e não haveria
+  // caminho de volta. Por isso aqui a checagem é ehSindico, não podeGerir —
+  // e a policy do banco diz a mesma coisa.
+  function abrirCargo(m: Morador) {
+    if (!ehSindico) return;
+
+    if (m.papel === 'sindico') {
+      Alert.alert('Já é síndico', 'O síndico não recebe cargo — ele já tem tudo.');
+      return;
+    }
+    if (m.status !== 'aprovado') {
+      Alert.alert('Vínculo pendente', 'Aprove o vínculo desta pessoa antes de dar um cargo a ela.');
+      return;
+    }
+
+    const atual = cargos[m.usuario_id] ?? null;
+    const nome = m.usuarios?.nome ?? 'Este morador';
+    const explicacao =
+      'O subsíndico faz tudo que o síndico faz, menos dar cargo. O conselho fiscal só lê.';
+
+    const botoes: { text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }[] = [];
+
+    if (atual) {
+      const outro: Cargo = atual === 'subsindico' ? 'conselho' : 'subsindico';
+      botoes.push({
+        text: 'Tornar ' + CARGO_LABEL[outro],
+        onPress: () => definirCargo(m.usuario_id, outro),
+      });
+      botoes.push({
+        text: 'Remover cargo',
+        style: 'destructive',
+        onPress: () => definirCargo(m.usuario_id, null),
+      });
+    } else {
+      botoes.push({ text: 'Subsíndico', onPress: () => definirCargo(m.usuario_id, 'subsindico') });
+      botoes.push({ text: 'Conselho fiscal', onPress: () => definirCargo(m.usuario_id, 'conselho') });
+    }
+    botoes.push({ text: 'Cancelar', style: 'cancel' });
+
+    Alert.alert(
+      nome,
+      atual ? 'Hoje é ' + CARGO_LABEL[atual] + '. ' + explicacao : explicacao,
+      botoes
+    );
+  }
+
+  async function definirCargo(usuarioId: string, cargo: Cargo | null) {
+    if (!condominioId) return;
+
+    if (cargo === null) {
+      // Delete bloqueado por RLS devolve zero linhas, não erro (armadilha nº4).
+      const { data, error } = await supabase
+        .from('cargos')
+        .delete()
+        .eq('usuario_id', usuarioId)
+        .eq('condominio_id', condominioId)
+        .select();
+
+      if (error) {
+        Alert.alert('Erro ao remover cargo', error.message);
+        return;
+      }
+      if (!data || data.length === 0) {
+        Alert.alert('Não consegui remover', 'O banco recusou. Só o síndico mexe em cargos.');
+        return;
+      }
+    } else {
+      const { data: userData } = await supabase.auth.getUser();
+      const { data, error } = await supabase
+        .from('cargos')
+        .upsert(
+          {
+            condominio_id: condominioId,
+            usuario_id: usuarioId,
+            cargo,
+            atribuido_por: userData.user?.id,
+          },
+          { onConflict: 'condominio_id,usuario_id' }
+        )
+        .select();
+
+      if (error) {
+        Alert.alert('Erro ao definir cargo', error.message);
+        return;
+      }
+      if (!data || data.length === 0) {
+        Alert.alert('Não consegui', 'O banco recusou. Só o síndico mexe em cargos.');
+        return;
+      }
+    }
+    carregar();
   }
 
   const totalMoradores = linhas.reduce(
@@ -116,6 +230,9 @@ export default function CondominosScreen() {
             {ocupadas} de {linhas.length} unidade{linhas.length === 1 ? '' : 's'} com alguém no app
             {pendentes > 0 ? ` · ${pendentes} aguardando aprovação` : ''}
           </Text>
+          {ehSindico && (
+            <Text style={styles.resumoDica}>Toque num morador para dar ou tirar um cargo.</Text>
+          )}
         </View>
       }
       ListEmptyComponent={
@@ -133,13 +250,22 @@ export default function CondominosScreen() {
           {item.moradores.length === 0 ? (
             <Text style={styles.ninguem}>ninguém entrou ainda</Text>
           ) : (
-            item.moradores.map((m) => (
-              <View key={m.usuario_id} style={styles.morador}>
-                <Text style={styles.nome}>{m.usuarios?.nome ?? 'Sem nome'}</Text>
-                <Text style={styles.papel}>{PAPEL_LABEL[m.papel] ?? m.papel}</Text>
-                {m.status === 'pendente' && <Text style={styles.pendente}>pendente</Text>}
-              </View>
-            ))
+            item.moradores.map((m) => {
+              const cargo = cargos[m.usuario_id];
+              return (
+                <Pressable
+                  key={m.usuario_id}
+                  style={styles.morador}
+                  onPress={() => abrirCargo(m)}
+                  disabled={!ehSindico}
+                >
+                  <Text style={styles.nome}>{m.usuarios?.nome ?? 'Sem nome'}</Text>
+                  <Text style={styles.papel}>{PAPEL_LABEL[m.papel] ?? m.papel}</Text>
+                  {cargo && <Text style={styles.cargo}>{CARGO_LABEL[cargo]}</Text>}
+                  {m.status === 'pendente' && <Text style={styles.pendente}>pendente</Text>}
+                </Pressable>
+              );
+            })
           )}
         </View>
       )}
@@ -159,6 +285,7 @@ const styles = StyleSheet.create({
   },
   resumoNumero: { fontSize: 20, fontWeight: '800', color: '#1B4B66' },
   resumoTexto: { fontSize: 12, color: '#6B665D', marginTop: 2 },
+  resumoDica: { fontSize: 11, color: '#1B4B66', marginTop: 6 },
   card: {
     backgroundColor: '#fff',
     borderRadius: 14,
@@ -172,6 +299,7 @@ const styles = StyleSheet.create({
   morador: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 },
   nome: { fontSize: 13, color: '#211F1B', flexShrink: 1 },
   papel: { fontSize: 11, color: '#6B665D' },
+  cargo: { fontSize: 10, color: '#1B4B66', fontWeight: '700', textTransform: 'uppercase' },
   pendente: {
     fontSize: 10,
     color: '#C98A1F',
