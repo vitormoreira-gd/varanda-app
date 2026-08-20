@@ -44,8 +44,9 @@ varanda-app/
 │   ├── ProblemasScreen.tsx
 │   ├── OficialScreen.tsx             — visão condômino: avisos, votações (votar), reuniões (RSVP)
 │   ├── OficialCriarScreen.tsx        — visão síndico: criar aviso/votação/reunião (usado dentro de Gestão)
-│   ├── GestaoScreen.tsx              — host síndico: Vínculos/Unidades/Sugestões/Problemas/Oficial
+│   ├── GestaoScreen.tsx              — host síndico: Vínculos/Condôminos/Unidades/Sugestões/Problemas/Oficial
 │   ├── UnidadesScreen.tsx            — síndico cadastra unidades em lote e compartilha convites
+│   ├── CondominosScreen.tsx          — síndico vê quem entrou, unidade por unidade
 │   ├── VinculosPendentesScreen.tsx   — síndico aprova vínculo pendente
 │   ├── ModerarScreen.tsx             — síndico muda status de sugestão/problema
 │   └── PerfilScreen.tsx
@@ -83,7 +84,9 @@ values ('VARANDA-2026-ABC', 'Ed. Fulano — trial iniciado 20/08');
 - `cancelada_em` e `motivo_cancelamento` em `reunioes`, mais a policy `sindico edita reuniao` (a tabela tinha select e insert, faltava update).
 - índice único `unidades_sem_duplicata` — fecha a dívida técnica da duplicata de unidade. É índice de expressão com `coalesce(bloco, '')` porque em unique constraint dois NULLs não conflitam, e sem isso "sem bloco / 101" entraria infinitas vezes. **Se já houver duplicata no banco, a criação do índice falha** — o arquivo traz a query pra conferir antes.
 
-**Decisão em aberto (item 4):** RLS é por linha, não por coluna. Liberar a linha de `usuarios` pro vizinho libera `telefone` e `foto_url` junto com `nome` — a UI mostrar só o nome não protege, quem chamar a API direto vê tudo. Isso conflita com o item de backlog "lista de condôminos visível só pro síndico (nome, unidade, papel, **contato**)". Se contato tiver que ser restrito, o caminho é mover telefone pra uma tabela separada com policy própria.
+**Sobre `telefone` e `foto_url` (era decisão em aberto, resolvida em 20/08/2026):** RLS é por linha, não por coluna, então a policy que deixa o vizinho ver seu `nome` libera a linha inteira de `usuarios` — telefone e foto junto. Mas ao implementar a lista de condôminos ficou claro que **nenhuma tela do app lê ou escreve essas duas colunas**: são colunas mortas desde o schema original, e não há telefone nenhum no banco pra vazar. A exposição é teórica.
+
+Fica registrado pra quando deixar de ser: **no dia em que existir cadastro de telefone, mover contato pra tabela separada com policy própria** — a lista de condôminos já está preparada, ela não exibe contato hoje.
 
 ## Armadilhas já resolvidas (não repetir)
 
@@ -112,6 +115,7 @@ Corrigido nesta sessão:
 
 - **Comentários no Mural** (Fase 1 do roadmap): card expande, lista comentários, campo pra escrever, síndico remove comentário. Primeira vez que a tabela `comentarios` é usada.
 - Push notifications e analytics **adiados por decisão** de 20/08/2026 — ver Parte 4.
+- **Lista de condôminos** (fecha a Fase 2 do roadmap): quem entrou, unidade por unidade, com resumo de adesão no topo — % de unidades ocupadas é o embrião da métrica que o trial vai precisar.
 - **Tempo em aberto nos Problemas, arquivar solicitações e cancelar reunião** — os três dependem de `db/migracao-arquivar-e-cancelar.sql`, que ainda não rodou. Sem ela as telas quebram no `arquivado_em`/`cancelada_em` inexistente.
 
 MVP funcionalmente completo e testado (antes desta sessão): cadastro → vínculo por código de convite → aprovação pelo síndico → Mural, Sugestões (com apoio), Problemas (com histórico de status), Oficial (avisos fixados, votação por unidade, reunião com RSVP e seletor de data/hora nativo) → Gestão do síndico pra tudo isso.
@@ -151,7 +155,7 @@ Vitor — dev de jogos mobile (Unity/C#), sem familiaridade prévia com Supabase
 ### Gestão (síndico)
 - [x] Arquivar sugestões/problemas — filtro Ativas/Arquivadas na tela de moderação, com arquivar e desarquivar
 - [x] Ter acesso a itens arquivados — mesmo filtro
-- [ ] Lista de condôminos do condomínio, visível só pro síndico (nome, unidade, papel, contato) — ver decisão em aberto sobre `telefone` na Parte 1
+- [x] Lista de condôminos, visível só pro síndico — aba Condôminos, agrupada por unidade, com nome, papel e status do vínculo. **Sem contato**, porque o app não coleta telefone (ver Parte 1). Mostra as unidades vazias de propósito: pro síndico, "quem ainda não entrou" é a informação mais útil
 - Analytics → movido pra Parte 3, virou pré-requisito do modelo de negócio, não feature de Gestão
 
 ### Onboarding self-service — FEITO
@@ -330,7 +334,7 @@ MVP completo e em uso num condomínio real. Um condomínio novo entra sozinho, s
 
 - ~~Cancelar reunião, com aviso automático junto~~ **FEITO**
 - ~~Arquivar sugestões/problemas + acesso ao arquivo~~ **FEITO**
-- Lista de condôminos — bloqueada pela decisão sobre `telefone` na Parte 1
+- ~~Lista de condôminos~~ **FEITO** — a decisão sobre `telefone` caiu junto: as colunas são mortas, não há o que proteger hoje
 - ~~`unique (condominio_id, bloco, numero)`~~ **FEITO** (índice `unidades_sem_duplicata`, na migração pendente)
 
 ## Fase 3 — Gestão do condomínio
