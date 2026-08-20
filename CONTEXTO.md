@@ -11,7 +11,8 @@ Este arquivo existe pra dar contexto rápido a qualquer instância do Claude (ou
 ## Estado
 
 - **Tudo commitado**, working tree limpo, branch `main`, sem remote (só local).
-- **Todas as migrações aplicadas no Supabase e dobradas** dentro de `db/varanda-schema.sql`. Não há migração solta pendente. O `db/` tem só o schema e os snippets de teste.
+- **Há uma migração pendente de aplicar:** `db/migracao-regras.sql` (Regras do condomínio). Rodar no SQL Editor do Supabase antes de abrir o app, senão a aba Regras da Gestão quebra. Já está dobrada dentro de `db/varanda-schema.sql` — depois de aplicada, apagar o arquivo de migração.
+- As demais migrações estão todas aplicadas e dobradas no schema.
 - App rodando no celular via Expo Go. Nenhum emulador na máquina, e foi decidido continuar assim.
 
 ## O que ainda NÃO foi testado no celular
@@ -21,10 +22,13 @@ Escrito e com `npx tsc --noEmit` limpo, mas não exercitado com gente de verdade
 1. **Reserva do salão** — o fluxo completo: morador pede, síndico aprova, e um segundo pedido pra mesma data tem que cair na mensagem "Data indisponível" (vinda do erro 23505 dos índices parciais).
 2. **Arquivar sugestão/problema**, **cancelar reunião com aviso**, e o badge de **"aberto há X dias"** — implementados e com a migração aplicada, mas sem teste de tela.
 3. **Lista de condôminos** — conferir se o resumo do topo bate com a realidade do Aurora.
+4. **Regras do condomínio** — publicar a primeira versão em Gestão › Regras, conferir se o aviso aparece fixado no Oficial de todo mundo, editar de novo e ver a versão subir pra 2. Salvar sem mudar o texto tem que dizer "Nada mudou" e **não** publicar aviso.
 
 ## Próximo passo
 
-Sobrou da **Fase 3** (ver Parte 4): regras do condomínio · relato confidencial em Problemas · subsíndico e conselho fiscal · troca de vaga de garagem.
+Sobrou da **Fase 3** (ver Parte 4): relato confidencial em Problemas · subsíndico e conselho fiscal · troca de vaga de garagem.
+
+Custo levantado em 20/08/2026, pra não recalcular: **relato confidencial** é o mais barato (uma coluna, reescrever a policy de select de `problemas` e herdar em `historico_status`, mais um toggle no formulário). **Subsíndico/conselho fiscal** é o mais caro e o mais arriscado — mexe em `eh_sindico()`, que sustenta as policies de escrita de quase toda tabela, e exige antes uma decisão de matriz de permissões. **Troca de vaga** são duas features empilhadas: o cadastro de vagas não existe.
 
 Não escolher sozinho: o Vitor quer ser consultado antes de começar uma implementação, com as opções e o custo de cada uma. Depois de escolhido, tocar até o fim sem perguntar de novo.
 
@@ -72,6 +76,7 @@ varanda-app/
 ├── App.tsx                          — auth gate + tab navigator (mostra aba Gestão só se papel === 'sindico')
 ├── db/
 │   ├── varanda-schema.sql           — DDL completo, idempotente. FONTE DA VERDADE do banco.
+│   ├── migracao-regras.sql          — PENDENTE de rodar no Supabase; apagar depois de aplicada
 │   └── snippets-teste.sql           — atalhos de SQL pro teste manual (não é migração)
 ├── lib/
 │   ├── supabase.ts                  — client Supabase configurado pra RN
@@ -85,9 +90,11 @@ varanda-app/
 │   ├── ReservasScreen.tsx            — pedir reserva do salão; síndico aprova/recusa na mesma tela
 │   ├── SugestoesScreen.tsx
 │   ├── ProblemasScreen.tsx
-│   ├── OficialScreen.tsx             — visão condômino: avisos, votações (votar), reuniões (RSVP)
+│   ├── OficialScreen.tsx             — visão condômino: regras, avisos, votações (votar), reuniões (RSVP)
+│   ├── RegrasScreen.tsx              — card de leitura das regras, renderizado dentro do Oficial
+│   ├── RegrasEditarScreen.tsx        — síndico edita as regras (dentro de Gestão)
 │   ├── OficialCriarScreen.tsx        — visão síndico: criar aviso/votação/reunião (usado dentro de Gestão)
-│   ├── GestaoScreen.tsx              — host síndico: Vínculos/Condôminos/Unidades/Sugestões/Problemas/Oficial
+│   ├── GestaoScreen.tsx              — host síndico: Vínculos/Condôminos/Unidades/Sugestões/Problemas/Oficial/Regras
 │   ├── UnidadesScreen.tsx            — síndico cadastra unidades em lote e compartilha convites
 │   ├── CondominosScreen.tsx          — síndico vê quem entrou, unidade por unidade
 │   ├── VinculosPendentesScreen.tsx   — síndico aprova vínculo pendente
@@ -133,6 +140,12 @@ Reserva do salão, **aplicada no Supabase em 20/08/2026** e já dobrada dentro d
 - Dois **índices parciais** garantem a regra de conflito no banco, não na tela: `reservas_uma_aprovada_por_data` (só uma aprovada por data e condomínio) e `reservas_um_pedido_por_unidade_data`. Parciais de propósito — vários pedidos *pendentes* na mesma data podem coexistir, e é justamente isso que dá ao síndico a escolha entre dois pedidos.
 - Um salão por condomínio. Se um dia houver várias áreas comuns, vira tabela `areas_comuns` + FK; hoje seria complexidade sem demanda.
 
+Regras do condomínio, **migração `db/migracao-regras.sql` pendente de aplicar** e já dobrada dentro de `varanda-schema.sql`:
+- tabela `regras` — uma linha por condomínio, com `condominio_id` como **primary key**: o regimento é um só, e a PK já garante isso sem constraint extra.
+- **Só existe policy de select.** Escrever é sempre pelo RPC `salvar_regras`, que grava e publica o aviso na mesma transação. Sem policy de insert/update, não há caminho no app que mude as regras sem o condomínio ficar sabendo — a exigência "aviso automático quando forem alteradas" virou invariante de banco em vez de disciplina de tela.
+- Sem tabela de histórico de versões, de propósito: o rastro de cada alteração é o próprio aviso publicado, que já fica no Oficial. `versao` é um contador pro aviso citar.
+- Salvar com o texto idêntico ao já publicado devolve a versão atual, não incrementa e **não** dispara aviso — senão o síndico spamaria o prédio ao abrir e fechar a tela.
+
 **Sobre `telefone` e `foto_url` (era decisão em aberto, resolvida em 20/08/2026):** RLS é por linha, não por coluna, então a policy que deixa o vizinho ver seu `nome` libera a linha inteira de `usuarios` — telefone e foto junto. Mas ao implementar a lista de condôminos ficou claro que **nenhuma tela do app lê ou escreve essas duas colunas**: são colunas mortas desde o schema original, e não há telefone nenhum no banco pra vazar. A exposição é teórica.
 
 Fica registrado pra quando deixar de ser: **no dia em que existir cadastro de telefone, mover contato pra tabela separada com policy própria** — a lista de condôminos já está preparada, ela não exibe contato hoje.
@@ -168,6 +181,7 @@ Corrigido nesta sessão:
 - **Reserva do salão** (primeiro item da Fase 3): pedido por unidade, aprovação do síndico na mesma tela, conflito de data resolvido no banco por índice parcial.
 - **Lista de condôminos** (fecha a Fase 2 do roadmap): quem entrou, unidade por unidade, com resumo de adesão no topo — % de unidades ocupadas é o embrião da métrica que o trial vai precisar.
 - **Tempo em aberto nos Problemas, arquivar solicitações e cancelar reunião** — migração aplicada e dobrada no schema.
+- **Regras do condomínio** (Fase 3): leitura no topo do Oficial (card que expande, com versão e quem atualizou), edição em Gestão › Regras, e o aviso automático garantido pelo RPC. **Migração ainda não aplicada no Supabase.**
 
 Ambiente: decidido em 20/08/2026 continuar testando **só no celular**. Não há SDK Android na máquina (os quatro Unity instalados estão sem o módulo AndroidPlayer), e emulador custaria ~10 GB. Expo Web foi descartado porque `react-native-web` não implementa `Alert`, e este app usa `Alert.alert` para todo feedback de erro e toda confirmação destrutiva — testar lá esconderia justamente a classe de bug mais comum aqui. O emulador só passa a valer quando a dor for testar síndico e morador lado a lado.
 
@@ -203,7 +217,7 @@ Vitor — dev de jogos mobile (Unity/C#), sem familiaridade prévia com Supabase
 - [x] Gestão e pedido de reserva do salão — aba "Salão" dentro de Solicitações. O bloqueio de data conflitante é garantido por índice parcial no banco, e o app traduz o erro 23505 numa mensagem que o morador entende. Síndico aprova/recusa na mesma tela, sem aba própria em Gestão
 
 ### Regras do condomínio
-- [ ] Regras editáveis pelo síndico, com aviso automático disparado quando forem alteradas
+- [x] Regras editáveis pelo síndico, com aviso automático disparado quando forem alteradas — o aviso não é uma etapa da tela, é parte da transação do RPC `salvar_regras`; a tabela nem tem policy de escrita. O síndico pode escrever um resumo do que mudou, que vira o texto do aviso; sem resumo sai um texto padrão
 
 ### Gestão (síndico)
 - [x] Arquivar sugestões/problemas — filtro Ativas/Arquivadas na tela de moderação, com arquivar e desarquivar
@@ -395,7 +409,7 @@ MVP completo e em uso num condomínio real. Um condomínio novo entra sozinho, s
 **Meta:** fazer o que o WhatsApp não faz. É o que justifica cobrar, quando chegar a hora de cobrar.
 
 - ~~Reserva de salão~~ **FEITO**
-- Regras do condomínio editáveis, com aviso automático quando mudarem
+- ~~Regras do condomínio editáveis, com aviso automático quando mudarem~~ **FEITO**
 - Subsíndico e conselho fiscal (permissões intermediárias)
 - Troca de vaga de garagem entre condôminos
 - Relato confidencial em Problemas (visível só ao síndico), separado do relato público
@@ -424,6 +438,5 @@ Não depende de código, mas está **parada por decisão** enquanto o foco é pr
 
 ## O que deliberadamente não está no topo
 
-- **Regras do condomínio** — valor percebido alto, mas é conteúdo estático que muda uma vez por ano
 - **Pré-liberação de visitantes** — a feature mais elogiada em review de concorrente, e a mais cara: depende de operação de portaria
 - **Gestão financeira completa** — fora de escopo por posicionamento. O plano define o Varanda como app de comunicação; competir com Superlógica em boleto e fiscal é outro produto

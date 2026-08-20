@@ -5,6 +5,7 @@ import UnidadesScreen from './UnidadesScreen';
 import CondominosScreen from './CondominosScreen';
 import ModerarScreen from './ModerarScreen';
 import OficialCriarScreen from './OficialCriarScreen';
+import RegrasEditarScreen from './RegrasEditarScreen';
 
 const ABAS = [
   { chave: 'vinculos', label: 'Vínculos' },
@@ -13,12 +14,13 @@ const ABAS = [
   { chave: 'sugestoes', label: 'Sugestões' },
   { chave: 'problemas', label: 'Problemas' },
   { chave: 'oficial', label: 'Oficial' },
+  { chave: 'regras', label: 'Regras' },
 ] as const;
 
+type Aba = (typeof ABAS)[number]['chave'];
+
 export default function GestaoScreen() {
-  const [aba, setAba] = useState<
-    'vinculos' | 'condominos' | 'unidades' | 'sugestoes' | 'problemas' | 'oficial'
-  >('vinculos');
+  const [aba, setAba] = useState<Aba>('vinculos');
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F2EFE6' }}>
@@ -40,6 +42,7 @@ export default function GestaoScreen() {
       {aba === 'sugestoes' && <ModerarScreen tipo="sugestoes" />}
       {aba === 'problemas' && <ModerarScreen tipo="problemas" />}
       {aba === 'oficial' && <OficialCriarScreen />}
+      {aba === 'regras' && <RegrasEditarScreen />}
     </View>
   );
 }

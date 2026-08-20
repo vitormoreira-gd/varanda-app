@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, Alert, RefreshControl } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useMeuCondominio } from '../lib/useMeuCondominio';
+import RegrasScreen from './RegrasScreen';
 
 type Aviso = { id: string; titulo: string; texto: string; fixado: boolean; criado_em: string };
 type Votacao = { id: string; titulo: string; descricao: string | null; opcoes: string[]; data_fim: string };
@@ -158,6 +159,8 @@ export default function OficialScreen() {
       contentContainerStyle={{ paddingBottom: 40 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
+      <RegrasScreen />
+
       <Text style={styles.secao}>Avisos</Text>
       {avisos.length === 0 && <Text style={styles.vazio}>Nenhum aviso no momento.</Text>}
       {avisos.map((a) => (
