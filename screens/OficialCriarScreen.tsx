@@ -1,18 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  Button,
-  StyleSheet,
-  Pressable,
-  Alert,
-  ScrollView,
-  Platform,
-} from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert, ScrollView, Platform } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { supabase } from '../lib/supabase';
 import { useMeuCondominio } from '../lib/useMeuCondominio';
+import { formatarCompromisso, formatarDataCurta, paraDataISO } from '../lib/datas';
+import { cores, espaco, raio } from '../lib/tema';
+import { Botao, Campo, Cartao, Chip, Etiqueta, Link, Secao, Seletor, Vazio } from '../components/ui';
 
 /**
  * Marca um item do Oficial como visível só pro gabinete (síndico, subsíndico
@@ -30,18 +23,45 @@ function RestritoCheckbox({
   oQue: string;
 }) {
   return (
-    <>
+    <View style={styles.restritoBloco}>
       <Pressable style={styles.checkboxRow} onPress={() => setRestrito(!restrito)}>
-        <View style={[styles.checkbox, restrito && styles.checkboxRestrito]} />
-        <Text style={styles.checkboxLabel}>Restrito ao gabinete</Text>
+        <View style={[styles.checkbox, restrito && styles.checkboxRestrito]}>
+          {restrito && <Text style={styles.check}>✓</Text>}
+        </View>
+        <Text style={styles.checkboxLabel}>🔒 Restrito ao gabinete</Text>
       </Pressable>
       {restrito && (
         <Text style={styles.restritoDica}>
-          Só você, o subsíndico e o conselho fiscal veem {oQue}. Os demais moradores não
-          ficam sabendo que existe.
+          Só você, o subsíndico e o conselho fiscal veem {oQue}. Os demais moradores não ficam
+          sabendo que existe.
         </Text>
       )}
-    </>
+    </View>
+  );
+}
+
+function Checkbox({
+  marcado,
+  onPress,
+  rotulo,
+  desabilitado,
+}: {
+  marcado: boolean;
+  onPress: () => void;
+  rotulo: string;
+  desabilitado?: boolean;
+}) {
+  return (
+    <Pressable
+      style={[styles.checkboxRow, desabilitado && { opacity: 0.4 }]}
+      onPress={onPress}
+      disabled={desabilitado}
+    >
+      <View style={[styles.checkbox, marcado && styles.checkboxAtivo]}>
+        {marcado && <Text style={styles.check}>✓</Text>}
+      </View>
+      <Text style={styles.checkboxLabel}>{rotulo}</Text>
+    </Pressable>
   );
 }
 
@@ -75,22 +95,50 @@ export function CriarAvisoForm() {
   }
 
   return (
-    <View style={styles.form}>
-      <TextInput style={styles.input} placeholder="Título" value={titulo} onChangeText={setTitulo} />
-      <TextInput
-        style={[styles.input, { minHeight: 80 }]}
-        placeholder="Texto do aviso"
+    <Cartao>
+      <Campo rotulo="Título" placeholder="Ex: Manutenção do elevador" value={titulo} onChangeText={setTitulo} />
+      <Campo
+        rotulo="Texto do aviso"
+        placeholder="O que os moradores precisam saber"
         value={texto}
         onChangeText={setTexto}
         multiline
+        estilo={{ marginTop: espaco.md }}
       />
-      <Pressable style={styles.checkboxRow} onPress={() => setFixado(!fixado)}>
-        <View style={[styles.checkbox, fixado && styles.checkboxAtivo]} />
-        <Text style={styles.checkboxLabel}>Fixar no topo do Mural/Oficial</Text>
-      </Pressable>
-      <RestritoCheckbox restrito={restrito} setRestrito={setRestrito} oQue="este aviso" />
-      <Button title="Publicar aviso" onPress={enviar} />
-    </View>
+      <Checkbox
+        marcado={fixado}
+        onPress={() => setFixado(!fixado)}
+        rotulo="📌 Fixar no topo do Oficial"
+        desabilitado={restrito}
+      />
+      {restrito ? (
+        <Text style={styles.notaFixar}>
+          Aviso restrito não pode ser fixado: o destaque do topo é do prédio inteiro, e a maioria
+          nem enxergaria este aviso.
+        </Text>
+      ) : fixado ? (
+        <Text style={styles.notaFixar}>
+          Só existe um aviso fixado por vez. Publicar este desafixa o atual.
+        </Text>
+      ) : null}
+
+      <RestritoCheckbox
+        restrito={restrito}
+        setRestrito={(v) => {
+          setRestrito(v);
+          // O banco tem um check impedindo os dois juntos; desmarcar aqui
+          // evita o insert falhar com mensagem de constraint.
+          if (v) setFixado(false);
+        }}
+        oQue="este aviso"
+      />
+      <Botao
+        titulo="Publicar aviso"
+        onPress={enviar}
+        disabled={!titulo.trim() || !texto.trim()}
+        estilo={{ marginTop: espaco.md }}
+      />
+    </Cartao>
   );
 }
 
@@ -143,35 +191,48 @@ export function CriarVotacaoForm() {
   }
 
   return (
-    <View style={styles.form}>
-      <TextInput style={styles.input} placeholder="Título da votação" value={titulo} onChangeText={setTitulo} />
-      <TextInput
-        style={[styles.input, { minHeight: 60 }]}
-        placeholder="Descrição / pauta (opcional)"
+    <Cartao>
+      <Campo
+        rotulo="Título da votação"
+        placeholder="Ex: Trocar o portão da garagem?"
+        value={titulo}
+        onChangeText={setTitulo}
+      />
+      <Campo
+        rotulo="Descrição / pauta (opcional)"
+        placeholder="Contexto pro morador decidir"
         value={descricao}
         onChangeText={setDescricao}
         multiline
+        estilo={{ marginTop: espaco.md }}
       />
-      {opcoes.map((op, i) => (
-        <TextInput
-          key={i}
-          style={styles.input}
-          placeholder={`Opção ${i + 1}`}
-          value={op}
-          onChangeText={(v) => atualizarOpcao(i, v)}
-        />
-      ))}
-      <Button title="+ Adicionar opção" onPress={adicionarOpcao} color="#6B665D" />
-      <Text style={styles.label}>Encerra em quantos dias?</Text>
-      <TextInput
-        style={styles.input}
+
+      <Text style={styles.rotulo}>Opções</Text>
+      <View style={{ gap: espaco.sm }}>
+        {opcoes.map((op, i) => (
+          <Campo
+            key={i}
+            placeholder={`Opção ${i + 1}`}
+            value={op}
+            onChangeText={(v) => atualizarOpcao(i, v)}
+          />
+        ))}
+      </View>
+      <View style={{ marginTop: espaco.sm, alignSelf: 'flex-start' }}>
+        <Link titulo="+ Adicionar opção" onPress={adicionarOpcao} />
+      </View>
+
+      <Campo
+        rotulo="Encerra em quantos dias?"
         keyboardType="number-pad"
         value={dias}
         onChangeText={setDias}
+        estilo={{ marginTop: espaco.md }}
       />
+
       <RestritoCheckbox restrito={restrito} setRestrito={setRestrito} oQue="esta votação" />
-      <Button title="Abrir votação" onPress={enviar} />
-    </View>
+      <Botao titulo="Abrir votação" onPress={enviar} estilo={{ marginTop: espaco.md }} />
+    </Cartao>
   );
 }
 
@@ -231,18 +292,18 @@ export function CriarReuniaoForm() {
   }
 
   return (
-    <View style={styles.form}>
-      <TextInput style={styles.input} placeholder="Título" value={titulo} onChangeText={setTitulo} />
+    <Cartao>
+      <Campo
+        rotulo="Título"
+        placeholder="Ex: Assembleia ordinária"
+        value={titulo}
+        onChangeText={setTitulo}
+      />
 
-      <Text style={styles.label}>Data</Text>
+      <Text style={styles.rotulo}>Data</Text>
       <Pressable style={styles.dataBtn} onPress={() => setMostrarCalendario(true)}>
-        <Text style={styles.dataBtnTexto}>
-          {dataSelecionada.toLocaleDateString('pt-BR', {
-            weekday: 'short',
-            day: '2-digit',
-            month: 'long',
-          })}
-        </Text>
+        <Text style={styles.dataBtnTexto}>{formatarDataCurta(paraDataISO(dataSelecionada))}</Text>
+        <Text style={styles.dataBtnDica}>tocar para trocar</Text>
       </Pressable>
 
       {mostrarCalendario && (
@@ -255,33 +316,50 @@ export function CriarReuniaoForm() {
         />
       )}
       {Platform.OS === 'ios' && mostrarCalendario && (
-        <Button title="Concluído" onPress={() => setMostrarCalendario(false)} />
+        <Botao
+          titulo="Concluído"
+          variante="secundario"
+          pequeno
+          onPress={() => setMostrarCalendario(false)}
+          estilo={{ marginTop: espaco.sm, alignSelf: 'flex-start' }}
+        />
       )}
 
-      <Text style={styles.label}>Horário</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horariosLista}>
+      <Text style={styles.rotulo}>Horário</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.horariosLista}
+        contentContainerStyle={{ gap: espaco.sm }}
+      >
         {HORARIOS.map((h) => (
-          <Pressable
-            key={h}
-            onPress={() => setHorario(h)}
-            style={[styles.horarioChip, horario === h && styles.horarioChipAtivo]}
-          >
-            <Text style={[styles.horarioTexto, horario === h && styles.horarioTextoAtivo]}>{h}</Text>
-          </Pressable>
+          <Chip key={h} titulo={h} ativo={horario === h} onPress={() => setHorario(h)} />
         ))}
       </ScrollView>
 
-      <TextInput style={styles.input} placeholder="Local (opcional)" value={local} onChangeText={setLocal} />
-      <TextInput
-        style={[styles.input, { minHeight: 60 }]}
-        placeholder="Pauta (opcional)"
+      <Campo
+        rotulo="Local (opcional)"
+        placeholder="Ex: Salão de festas"
+        value={local}
+        onChangeText={setLocal}
+        estilo={{ marginTop: espaco.md }}
+      />
+      <Campo
+        rotulo="Pauta (opcional)"
+        placeholder="O que vai ser discutido"
         value={pauta}
         onChangeText={setPauta}
         multiline
+        estilo={{ marginTop: espaco.md }}
       />
       <RestritoCheckbox restrito={restrito} setRestrito={setRestrito} oQue="esta reunião" />
-      <Button title="Agendar reunião" onPress={enviar} />
-    </View>
+      <Botao
+        titulo="Agendar reunião"
+        onPress={enviar}
+        disabled={!titulo.trim()}
+        estilo={{ marginTop: espaco.md }}
+      />
+    </Cartao>
   );
 }
 
@@ -324,7 +402,7 @@ export function ProximasReunioes() {
   function confirmarCancelamento(r: ReuniaoAgendada) {
     Alert.alert(
       'Cancelar reunião',
-      `"${r.titulo}", marcada para ${new Date(r.data_hora).toLocaleString('pt-BR')}.\n\nQuer publicar um aviso avisando do cancelamento?`,
+      `"${r.titulo}", marcada para ${formatarCompromisso(r.data_hora)}.\n\nQuer publicar um aviso avisando do cancelamento?`,
       [
         { text: 'Voltar', style: 'cancel' },
         { text: 'Só cancelar', onPress: () => cancelar(r, false) },
@@ -348,14 +426,14 @@ export function ProximasReunioes() {
     if (!data || data.length === 0) {
       Alert.alert(
         'Não consegui cancelar',
-        'O banco recusou a alteração. Falta rodar db/migracao-arquivar-e-cancelar.sql (policy "sindico edita reuniao").'
+        'O banco recusou a alteração. Confira se a policy "sindico edita reuniao" existe em reunioes.'
       );
       return;
     }
 
     if (publicarAviso && condominioId) {
       const { data: userData } = await supabase.auth.getUser();
-      const quando = new Date(r.data_hora).toLocaleString('pt-BR');
+      const quando = formatarCompromisso(r.data_hora);
       const { error: erroAviso } = await supabase.from('avisos').insert({
         titulo: `Reunião cancelada: ${r.titulo}`,
         texto: `A reunião marcada para ${quando}${r.local ? ` no ${r.local}` : ''} foi cancelada.`,
@@ -373,121 +451,131 @@ export function ProximasReunioes() {
     carregar();
   }
 
-  if (lista.length === 0) {
-    return <Text style={styles.vazio}>Nenhuma reunião futura agendada.</Text>;
-  }
-
   return (
-    <View style={{ marginTop: 16, gap: 8 }}>
-      <Text style={styles.secao}>Reuniões agendadas</Text>
-      {lista.map((r) => {
-        const cancelada = !!r.cancelada_em;
-        return (
-          <View key={r.id} style={[styles.reuniaoCard, cancelada && styles.reuniaoCancelada]}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.reuniaoTitulo, cancelada && styles.textoRiscado]}>
-                {r.titulo}
-              </Text>
-              <Text style={styles.reuniaoMeta}>
-                {new Date(r.data_hora).toLocaleString('pt-BR')}
-                {r.local ? ` · ${r.local}` : ''}
-              </Text>
-            </View>
-            {cancelada ? (
-              <Text style={styles.tagCancelada}>cancelada</Text>
-            ) : (
-              <Pressable onPress={() => confirmarCancelamento(r)} hitSlop={8}>
-                <Text style={styles.cancelar}>Cancelar</Text>
-              </Pressable>
-            )}
-          </View>
-        );
-      })}
-    </View>
+    <>
+      <Secao titulo="Reuniões agendadas" />
+      {lista.length === 0 ? (
+        <Vazio icone="📅" titulo="Nenhuma reunião futura agendada" />
+      ) : (
+        lista.map((r) => {
+          const cancelada = !!r.cancelada_em;
+          return (
+            <Cartao key={r.id} destaque={cancelada ? cores.perigo : undefined}>
+              <View style={styles.reuniaoLinha}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.reuniaoTitulo, cancelada && styles.riscado]}>
+                    {r.titulo}
+                  </Text>
+                  <Text style={styles.reuniaoMeta}>
+                    {formatarCompromisso(r.data_hora)}
+                    {r.local ? ` · ${r.local}` : ''}
+                  </Text>
+                </View>
+                {cancelada ? (
+                  <Etiqueta texto="cancelada" tom="critico" />
+                ) : (
+                  <Link titulo="Cancelar" tom="perigo" onPress={() => confirmarCancelamento(r)} />
+                )}
+              </View>
+            </Cartao>
+          );
+        })
+      )}
+    </>
   );
 }
 
+const ABAS = [
+  { chave: 'aviso', label: 'Aviso' },
+  { chave: 'votacao', label: 'Votação' },
+  { chave: 'reuniao', label: 'Reunião' },
+] as const;
+
+type Aba = (typeof ABAS)[number]['chave'];
+
 export default function OficialCriarScreen() {
-  const [aba, setAba] = useState<'aviso' | 'votacao' | 'reuniao'>('aviso');
+  const [aba, setAba] = useState<Aba>('aviso');
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 60 }}>
-      <View style={styles.seletor}>
-        {(['aviso', 'votacao', 'reuniao'] as const).map((a) => (
-          <Pressable key={a} style={[styles.opcaoAba, aba === a && styles.opcaoAbaAtiva]} onPress={() => setAba(a)}>
-            <Text style={[styles.opcaoAbaTexto, aba === a && styles.opcaoAbaTextoAtiva]}>
-              {a === 'aviso' ? 'Aviso' : a === 'votacao' ? 'Votação' : 'Reunião'}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: espaco.xxl }}>
+      <Seletor opcoes={ABAS} valor={aba} aoTrocar={setAba} />
 
-      {aba === 'aviso' && <CriarAvisoForm />}
-      {aba === 'votacao' && <CriarVotacaoForm />}
-      {aba === 'reuniao' && (
-        <>
-          <CriarReuniaoForm />
-          <ProximasReunioes />
-        </>
-      )}
+      <View style={styles.corpo}>
+        {aba === 'aviso' && <CriarAvisoForm />}
+        {aba === 'votacao' && <CriarVotacaoForm />}
+        {aba === 'reuniao' && (
+          <>
+            <CriarReuniaoForm />
+            <ProximasReunioes />
+          </>
+        )}
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2EFE6', paddingHorizontal: 16 },
-  seletor: { flexDirection: 'row', marginTop: 12, marginBottom: 12, backgroundColor: '#E4DFD2', borderRadius: 12, padding: 3 },
-  opcaoAba: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center' },
-  opcaoAbaAtiva: { backgroundColor: '#fff' },
-  opcaoAbaTexto: { fontSize: 13, color: '#6B665D', fontWeight: '600' },
-  opcaoAbaTextoAtiva: { color: '#1B4B66' },
-  form: { backgroundColor: '#fff', borderRadius: 14, padding: 14, gap: 8 },
-  input: { borderWidth: 1, borderColor: '#E4DFD2', borderRadius: 10, padding: 10, backgroundColor: '#F2EFE6' },
-  label: { fontSize: 12, color: '#6B665D', marginTop: 4 },
-  checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 },
-  checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: '#E4DFD2' },
-  checkboxAtivo: { backgroundColor: '#1B4B66', borderColor: '#1B4B66' },
-  checkboxRestrito: { backgroundColor: '#7A4B8C', borderColor: '#7A4B8C' },
-  checkboxLabel: { fontSize: 13, color: '#211F1B' },
-  restritoDica: { fontSize: 11, color: '#7A4B8C', lineHeight: 16, marginBottom: 6 },
-  dataBtn: {
-    borderWidth: 1,
-    borderColor: '#E4DFD2',
-    borderRadius: 10,
-    padding: 12,
-    backgroundColor: '#F2EFE6',
-    alignItems: 'center',
+  container: { flex: 1, backgroundColor: cores.fundo },
+  corpo: { paddingHorizontal: espaco.lg, marginTop: espaco.md },
+  rotulo: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: cores.textoFraco,
+    marginTop: espaco.md,
+    marginBottom: espaco.xs,
   },
-  dataBtnTexto: { color: '#1B4B66', fontWeight: '600', fontSize: 14, textTransform: 'capitalize' },
-  horariosLista: { flexGrow: 0, marginVertical: 4 },
-  horarioChip: {
-    borderWidth: 1,
-    borderColor: '#E4DFD2',
-    borderRadius: 20,
-    paddingVertical: 7,
-    paddingHorizontal: 14,
-    marginRight: 6,
-  },
-  horarioChipAtivo: { backgroundColor: '#1B4B66', borderColor: '#1B4B66' },
-  horarioTexto: { fontSize: 13, color: '#6B665D' },
-  horarioTextoAtiva: { color: '#fff', fontWeight: '600' },
-  horarioTextoAtivo: { color: '#fff', fontWeight: '600' },
-  secao: { fontSize: 13, fontWeight: '700', color: '#1B4B66', marginTop: 4 },
-  reuniaoCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E4DFD2',
-    padding: 12,
+  checkboxRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: espaco.sm,
+    marginTop: espaco.md,
   },
-  reuniaoCancelada: { backgroundColor: '#F7F5EF' },
-  reuniaoTitulo: { fontSize: 14, fontWeight: '600', color: '#211F1B' },
-  reuniaoMeta: { fontSize: 11, color: '#6B665D', marginTop: 2 },
-  textoRiscado: { textDecorationLine: 'line-through', color: '#6B665D' },
-  tagCancelada: { fontSize: 11, color: '#B6512E', fontWeight: '600' },
-  cancelar: { fontSize: 12, color: '#B6512E', fontWeight: '600' },
-  vazio: { textAlign: 'center', color: '#6B665D', marginTop: 20, fontSize: 13 },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: cores.borda,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxAtivo: { backgroundColor: cores.primaria, borderColor: cores.primaria },
+  checkboxRestrito: { backgroundColor: cores.restrito, borderColor: cores.restrito },
+  check: { color: cores.textoClaro, fontSize: 12, fontWeight: '800' },
+  checkboxLabel: { fontSize: 13, color: cores.texto, fontWeight: '600' },
+  restritoBloco: { marginTop: espaco.xs },
+  notaFixar: {
+    fontSize: 11,
+    color: cores.textoFraco,
+    lineHeight: 16,
+    marginTop: espaco.xs,
+    marginLeft: 28,
+  },
+  restritoDica: {
+    fontSize: 11,
+    color: cores.restrito,
+    lineHeight: 16,
+    marginTop: espaco.sm,
+    backgroundColor: cores.restritoFundo,
+    borderRadius: raio.sm,
+    padding: espaco.md,
+  },
+  dataBtn: {
+    borderWidth: 1,
+    borderColor: cores.borda,
+    borderRadius: raio.sm,
+    paddingVertical: espaco.md,
+    paddingHorizontal: espaco.md,
+    backgroundColor: cores.superficieAlt,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dataBtnTexto: { color: cores.primaria, fontWeight: '700', fontSize: 15 },
+  dataBtnDica: { color: cores.textoFraco, fontSize: 11 },
+  horariosLista: { flexGrow: 0 },
+  reuniaoLinha: { flexDirection: 'row', alignItems: 'center', gap: espaco.md },
+  reuniaoTitulo: { fontSize: 14, fontWeight: '700', color: cores.texto },
+  reuniaoMeta: { fontSize: 12, color: cores.textoFraco, marginTop: 2 },
+  riscado: { textDecorationLine: 'line-through', color: cores.textoFraco },
 });

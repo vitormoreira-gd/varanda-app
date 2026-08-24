@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, TextInput, Button, ScrollView, StyleSheet, Alert } from 'react-native';
+import { Text, ScrollView, StyleSheet, Alert } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useMeuCondominio } from '../lib/useMeuCondominio';
 import { formatarDataHora } from '../lib/datas';
+import { cores, espaco } from '../lib/tema';
+import { Botao, Campo, Cartao, Carregando } from '../components/ui';
 
 // Edição das regras pelo síndico. Salvar passa pelo RPC salvar_regras, que
 // grava e publica o aviso na mesma transação — não dá pra mudar as regras
@@ -97,66 +99,64 @@ export default function RegrasEditarScreen() {
     );
   }
 
-  if (carregando) {
-    return (
-      <View style={styles.center}>
-        <Text>Carregando...</Text>
-      </View>
-    );
-  }
+  if (carregando) return <Carregando />;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 60 }}>
-      <Text style={styles.meta}>
-        {versao === null
-          ? 'Ainda não há regras publicadas neste condomínio.'
-          : `Versão ${versao} · publicada ${formatarDataHora(atualizadoEm ?? '')}`}
-      </Text>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: espaco.xxl }}>
+      <Cartao>
+        <Text style={styles.meta}>
+          {versao === null
+            ? 'Ainda não há regras publicadas neste condomínio.'
+            : `Versão ${versao} · publicada ${formatarDataHora(atualizadoEm ?? '')}`}
+        </Text>
 
-      <TextInput
-        style={[styles.input, styles.inputGrande]}
-        placeholder={'Regras e regimento interno do condomínio.\n\nEx: horário de silêncio, uso do salão, mudanças, animais, área de lazer...'}
-        value={texto}
-        onChangeText={setTexto}
-        multiline
-        textAlignVertical="top"
-      />
+        <Campo
+          rotulo="Regimento interno"
+          placeholder={
+            'Regras e regimento interno do condomínio.\n\nEx: horário de silêncio, uso do salão, mudanças, animais, área de lazer...'
+          }
+          value={texto}
+          onChangeText={setTexto}
+          multiline
+          textAlignVertical="top"
+          style={styles.inputGrande}
+          estilo={{ marginTop: espaco.md }}
+        />
 
-      <TextInput
-        style={styles.input}
-        placeholder="O que mudou (opcional) — vira o texto do aviso"
-        value={resumo}
-        onChangeText={setResumo}
-        multiline
-      />
+        <Campo
+          rotulo="O que mudou (opcional)"
+          placeholder="Vira o texto do aviso enviado a todos"
+          value={resumo}
+          onChangeText={setResumo}
+          multiline
+          estilo={{ marginTop: espaco.md }}
+        />
 
-      <Text style={styles.dica}>
-        Sem esse resumo, o aviso sai com um texto padrão dizendo que as regras mudaram.
-      </Text>
+        <Text style={styles.dica}>
+          Sem esse resumo, o aviso sai com um texto padrão dizendo que as regras mudaram. Publicar
+          sempre dispara o aviso — não existe caminho no app que altere as regras em silêncio.
+        </Text>
 
-      <Button
-        title={salvando ? 'Publicando...' : versao === null ? 'Publicar regras' : 'Publicar nova versão'}
-        onPress={confirmar}
-        disabled={salvando}
-      />
+        <Botao
+          titulo={versao === null ? 'Publicar regras' : 'Publicar nova versão'}
+          onPress={confirmar}
+          disabled={salvando}
+          carregando={salvando}
+        />
+      </Cartao>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2EFE6', paddingHorizontal: 16, paddingTop: 16 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  meta: { fontSize: 12, color: '#6B665D', marginBottom: 10 },
-  input: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#E4DFD2',
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 14,
-    color: '#211F1B',
-    marginBottom: 10,
+  container: { flex: 1, backgroundColor: cores.fundo, paddingHorizontal: espaco.lg },
+  meta: { fontSize: 12, color: cores.textoFraco },
+  inputGrande: { minHeight: 240 },
+  dica: {
+    fontSize: 11,
+    color: cores.textoFraco,
+    lineHeight: 16,
+    marginTop: espaco.md,
+    marginBottom: espaco.lg,
   },
-  inputGrande: { minHeight: 260 },
-  dica: { fontSize: 11, color: '#6B665D', marginBottom: 16, lineHeight: 16 },
 });

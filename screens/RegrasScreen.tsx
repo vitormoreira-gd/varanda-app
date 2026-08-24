@@ -1,9 +1,11 @@
 import { useCallback, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { useMeuCondominio } from '../lib/useMeuCondominio';
 import { formatarDataHora } from '../lib/datas';
+import { cores, espaco } from '../lib/tema';
+import { Vazio } from '../components/ui';
 
 type RegrasBruto = {
   texto: string;
@@ -14,13 +16,15 @@ type RegrasBruto = {
 
 type Regras = { texto: string; versao: number; atualizado_em: string; autor: string | null };
 
-// Bloco de leitura das regras. Vive dentro da OficialScreen (não é uma aba
-// própria) porque regimento é documento oficial, e uma aba só pra um texto
-// que muda uma vez por ano não paga o espaço na barra.
+// Sub-aba "Regras" do Oficial.
+//
+// Deliberadamente SEM cartão, sombra ou borda: isto é um documento pra ler de
+// ponta a ponta, não um item de lista. A estética de card sugere que dá pra
+// tocar e algo acontece — e aqui não acontece nada. Por isso a tipografia é
+// maior e mais espaçada que a do resto do app.
 export default function RegrasScreen() {
   const { condominioId } = useMeuCondominio();
   const [regras, setRegras] = useState<Regras | null>(null);
-  const [aberto, setAberto] = useState(false);
   const [carregando, setCarregando] = useState(true);
 
   const carregar = useCallback(async () => {
@@ -70,37 +74,41 @@ export default function RegrasScreen() {
 
   if (!regras) {
     return (
-      <>
-        <Text style={styles.secao}>Regras do condomínio</Text>
-        <Text style={styles.vazio}>O síndico ainda não publicou as regras.</Text>
-      </>
+      <Vazio
+        icone="📖"
+        titulo="O síndico ainda não publicou as regras"
+        texto="Quando publicar, o regimento inteiro aparece aqui."
+      />
     );
   }
 
   return (
-    <>
-      <Text style={styles.secao}>Regras do condomínio</Text>
-      <View style={styles.card}>
-        <Text style={styles.meta}>
-          versão {regras.versao} · atualizado {formatarDataHora(regras.atualizado_em)}
-          {regras.autor ? ` por ${regras.autor}` : ''}
-        </Text>
-        <Text style={styles.texto} numberOfLines={aberto ? undefined : 5}>
-          {regras.texto}
-        </Text>
-        <Pressable onPress={() => setAberto(!aberto)} hitSlop={8}>
-          <Text style={styles.link}>{aberto ? 'Recolher' : 'Ler tudo'}</Text>
-        </Pressable>
-      </View>
-    </>
+    <ScrollView style={styles.container} contentContainerStyle={styles.conteudo}>
+      <Text style={styles.titulo}>Regimento interno</Text>
+      <Text style={styles.meta}>
+        versão {regras.versao} · atualizado {formatarDataHora(regras.atualizado_em)}
+        {regras.autor ? ` por ${regras.autor}` : ''}
+      </Text>
+
+      <View style={styles.regua} />
+
+      <Text style={styles.texto}>{regras.texto}</Text>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  secao: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6B665D', marginTop: 20, marginBottom: 8, fontWeight: '600' },
-  vazio: { color: '#6B665D', fontSize: 13, marginBottom: 8 },
-  card: { backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#E4DFD2' },
-  meta: { fontSize: 12, color: '#6B665D' },
-  texto: { fontSize: 13, color: '#211F1B', marginTop: 8, lineHeight: 20 },
-  link: { fontSize: 12, color: '#1B4B66', fontWeight: '600', marginTop: 10 },
+  container: { flex: 1, backgroundColor: cores.fundo },
+  conteudo: { paddingHorizontal: espaco.xl, paddingTop: espaco.lg, paddingBottom: espaco.xxl },
+  titulo: { fontSize: 20, fontWeight: '800', color: cores.texto },
+  meta: { fontSize: 12, color: cores.textoFraco, marginTop: espaco.xs },
+  regua: {
+    height: 1,
+    backgroundColor: cores.borda,
+    marginTop: espaco.lg,
+    marginBottom: espaco.lg,
+  },
+  // Corpo de documento: um pouco maior e bem mais arejado que o texto de
+  // card, porque aqui a pessoa lê parágrafos e não varre uma lista.
+  texto: { fontSize: 16, color: cores.texto, lineHeight: 26 },
 });
