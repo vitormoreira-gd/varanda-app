@@ -6,37 +6,83 @@ Este arquivo existe pra dar contexto rápido a qualquer instância do Claude (ou
 
 # Onde retomar
 
-*Última sessão: 20/08/2026. Bloco escrito no fim da sessão pra próxima instância (ou pro Vitor) não precisar reconstruir estado.*
+*Última sessão: 21/08/2026. Bloco escrito no fim da sessão pra próxima instância (ou pro Vitor) não precisar reconstruir estado.*
 
 ## Estado
 
-- **Tudo commitado**, working tree limpo, branch `main`, sem remote (só local).
-- **Há uma migração pendente de aplicar:** `db/migracao-cargos.sql` (subsíndico, conselho fiscal e canal restrito do Oficial). Rodar no SQL Editor do Supabase antes de abrir o app — sem ela nada de Gestão funciona, porque as policies de escrita passaram a chamar `pode_gerir()`. Já está dobrada dentro de `db/varanda-schema.sql`; depois de aplicada, apagar o arquivo.
-- As demais migrações estão todas aplicadas e dobradas no schema.
+- Branch `main`, sem remote (só local).
+- `db/migracao-cargos.sql` e `db/seed-demo.sql` **aplicados** em 21/08/2026. O arquivo de migração de cargos foi apagado, como o próprio cabeçalho dele mandava; o seed fica, porque é re-executável e reseta a demonstração.
+- **Uma migração pendente:** `db/migracao-mural.sql`, com quatro coisas — (1) `papeis_do_meu_condominio()`, que diz quem é síndico/subsíndico pro Mural marcar embaixo do nome; (2) policy de `cargos` reescrita, escondendo o conselho fiscal do morador comum; (3) gatilho de **um aviso fixado por vez**; (4) check constraint impedindo **aviso restrito fixado**. Sem ela o Mural mostra "Erro ao carregar cargos" e as regras de destaque do Oficial não valem. Já dobrada em `db/varanda-schema.sql`; **apagar depois de aplicada**.
+- **Segunda migração pendente:** `db/migracao-votos.sql` — policy de `update` em `votos` (trocar o voto enquanto a votação está aberta), prazo (`data_fim > now()`) somado à policy de insert, e a policy de select reescrita pra esconder a apuração do morador comum. Sem ela o app deixa tocar em outra opção, mas o banco recusa e aparece "Não consegui trocar o voto". Já dobrada em `db/varanda-schema.sql`; **apagar depois de aplicada**. Não mexe em dados.
+- **Terceira migração pendente:** `db/migracao-solicitacoes.sql` — converte as sugestões ativas em posts do Mural e as curtidas correspondentes. Mexe em dados, mas é reversível: a coluna `sugestoes.migrado_para_post` guarda de onde veio cada post, e as tabelas `sugestoes`/`apoios` continuam de pé até você conferir no celular.
+- **Quarta migração pendente:** `db/migracao-privacidade.sql` — a coluna `area_comum` em `problemas`, as policies de `problemas`, `historico_status` e `reservas` reescritas, e a função `datas_ocupadas()`. **Rodar por último.** Sem ela o formulário de Manutenção e o formulário do Salão dão erro na cara: um grava numa coluna que não existe, o outro chama uma função que não existe. Já dobrada em `db/varanda-schema.sql`; **apagar depois de aplicada**.
+- A migração de mural desfixa o aviso restrito que o seed tinha criado fixado. O arquivo do seed também foi corrigido, então re-rodar o seed não reintroduz o problema.
 - App rodando no celular via Expo Go. Nenhum emulador na máquina, e foi decidido continuar assim.
+- IP da máquina em 21/08/2026: `exp://192.168.15.6:8081`. Muda se a rede mudar — conferir com `ipconfig` (o adaptador **Ethernet**, não o "Topaz Loopback", que devolve um IP público da AWS e não serve).
 
-## O que ainda NÃO foi testado no celular
+## O objetivo mudou nesta sessão
 
-Escrito e com `npx tsc --noEmit` limpo, mas não exercitado com gente de verdade:
+O alvo agora é **apresentar** o app a um síndico — ele vê, você conduz, e o feedback é a saída. Não é piloto: ele não vai instalar nem usar com o prédio dele.
 
-1. **Reserva do salão** — o fluxo completo: morador pede, síndico aprova, e um segundo pedido pra mesma data tem que cair na mensagem "Data indisponível" (vinda do erro 23505 dos índices parciais).
-2. **Arquivar sugestão/problema**, **cancelar reunião com aviso**, e o badge de **"aberto há X dias"** — implementados e com a migração aplicada, mas sem teste de tela.
-3. **Lista de condôminos** — conferir se o resumo do topo bate com a realidade do Aurora.
-4. **Subsíndico, conselho fiscal e canal restrito** — nada disso foi exercitado. O roteiro mínimo: dar subsíndico a alguém pela aba Condôminos e conferir que a Gestão dele abre inteira **menos** a possibilidade de dar cargo; dar conselho a outro e conferir que a Gestão dele abre em modo leitura, com a faixa âmbar e sem botão de status nem de arquivar; publicar um aviso restrito e conferir com uma terceira conta comum que ele **não** aparece. O teste que mais importa é o do vazamento pelos filhos: abrir uma votação restrita, votar como síndico, e confirmar que o morador comum não vê nem a votação nem os votos dela.
+Isso reordenou o roadmap:
+
+- **`.apk` / EAS Build saiu do caminho crítico.** Numa apresentação você mostra no seu próprio celular, no Expo Go. Chega a ser bloqueio só no dia em que ele disser "quero levar pro meu prédio". O `app.json` ainda é o template do Expo (o app se chama "varanda-app", sem `android.package`, sem `eas.json`) — é aí que se mexe quando a hora chegar.
+- **Recuperação de senha e edição de perfil saíram junto.** Só importam quando existir morador de verdade com conta própria.
+- **Revisão de layout subiu e foi feita.** O argumento da apresentação é "a navegação é intuitiva e substitui o WhatsApp"; telas cruas contradiziam o próprio pitch. Antes ela estava adiada pro fim do roadmap — a inversão foi consciente.
 
 ## Próximo passo
 
-Sobrou da **Fase 3** (ver Parte 4): relato confidencial em Problemas · troca de vaga de garagem.
+*Atualizado em 22/08/2026: os itens 2 e 3, que estavam decididos e por escrever, foram escritos. Sobra rodar as migrações e ensaiar.*
 
-Custo levantado em 20/08/2026, pra não recalcular: **relato confidencial** é o mais barato (uma coluna, reescrever a policy de select de `problemas` e herdar em `historico_status`, mais um toggle no formulário) — e ficou ainda mais barato agora, porque `pode_fiscalizar()` já existe pra dizer quem enxerga o sigiloso e a lição dos filhos que não herdam visibilidade já está aprendida. **Troca de vaga** são duas features empilhadas: o cadastro de vagas não existe.
+### 1. Rodar as quatro migrações pendentes, nesta ordem
 
-Não escolher sozinho: o Vitor quer ser consultado antes de começar uma implementação, com as opções e o custo de cada uma. Depois de escolhido, tocar até o fim sem perguntar de novo.
+`db/migracao-mural.sql` → `db/migracao-votos.sql` → `db/migracao-solicitacoes.sql` → `db/migracao-privacidade.sql`.
+
+A quarta é a desta sessão (manutenção privada + salão individual). Ela não depende das outras três pra funcionar — só de `pode_gerir()`, que veio na migração de cargos, já aplicada. Fica por último porque a de solicitações mexe em dados e convém conferi-la antes.
+
+**Sem a quarta o app quebra em dois lugares:** o formulário de Manutenção grava `area_comum`, que ainda não existe como coluna, e o formulário do Salão chama `datas_ocupadas()`, que ainda não existe como função. Não é degradação silenciosa — é erro na cara.
+
+Depois, **ensaiar a apresentação inteira no celular**. Nada do que entrou em 21 e 22/08 foi exercitado com gente de verdade.
+
+### 2. Manutenção: área comum vs. minha unidade — FEITO em 22/08/2026
+
+Ver *Status atual*. Sobrou como decisão em aberto: nada.
+
+### 3. Salão individual, com datas bloqueadas no calendário — FEITO em 22/08/2026
+
+Ver *Status atual*. Sobrou como decisão em aberto: nada.
+
+### Roteiro da apresentação
+
+Na ordem em que a demonstração se conta sozinha:
+
+1. Entrar como **Síndico**. Mural povoado, Oficial com aviso fixado + votação aberta + assembleia marcada, Regras versão 2.
+2. Gestão → **Vínculos**: a Tereza está esperando aprovação. Aprovar ao vivo.
+3. Gestão → **Condôminos**: 67% de adesão, o 103 vazio. É a métrica que o trial vai precisar.
+4. Solicitações → **Salão**: aprovar o pedido pendente do 102 na frente dele. Repare que o síndico vê as duas reservas, de unidades diferentes.
+5. Solicitações → **Manutenção**: quatro pedidos, e um deles com a etiqueta **"Só na unidade"** — a torneira do 202.
+6. Perfil → trocar para **Morador**. O aviso restrito, a votação restrita e a reunião do conselho **somem**. Esse é o momento que vende.
+7. Ainda como Morador, Solicitações → **Salão**: sobra só a reserva do 202, e o **+** abre um calendário com as datas ocupadas riscadas. A privacidade não custou a informação — ele continua sabendo o que está livre, só não sabe de quem é.
+8. Ainda como Morador, **Manutenção**: a torneira dele continua lá (é dele), e os três pedidos de área comum também.
+9. Perfil → trocar para **Conselho fiscal**. Gestão abre em faixa âmbar, sem botão nenhum — e a torneira do 202 **some**, porque conselho fiscal fiscaliza contas, não queixa doméstica.
+
+O ponto que mais importa testar é o do vazamento pelos filhos (armadilha nº8): como Morador, a votação restrita não pode aparecer **nem os votos dela**.
+
+## O que ainda NÃO foi testado no celular
+
+O Vitor disse em 21/08 que já exercitou boa parte da lista anterior (reserva do salão, arquivamento, cancelamento de reunião, badge de dias, lista de condôminos). O que continua sem teste:
+
+1. **Subsíndico, conselho fiscal e canal restrito** — a migração foi aplicada, mas o comportamento não foi exercitado.
+2. **Tudo que entrou em 21/08**: modo demonstração, seed, a passada de layout, a reforma de navegação + Mural, o Oficial em sub-abas, a enquete de votação e a reorganização de Solicitações. Zero minutos de tela.
+3. **Tudo que entrou em 22/08**: manutenção privada, salão individual e o calendário próprio. O calendário é o item mais arriscado da lista — é componente novo, escrito à mão, e a grade de mês nunca rodou em aparelho. Conferir especialmente a virada de mês e o dia 1 caindo no dia da semana certo.
 
 ## Como subir o ambiente
 
 ```
 npx expo start
 ```
+
+Depois de mexer no `.env`, subir com `npx expo start -c` — sem limpar o cache a variável nova não chega no client.
 
 No Expo Go, "Enter URL manually" → `exp://<ip-da-maquina>:8081`. O celular fica no Wi-Fi e o PC no cabo, mesma rede.
 
@@ -47,7 +93,7 @@ Set-NetConnectionProfile -InterfaceAlias Ethernet -NetworkCategory Private
 New-NetFirewallRule -DisplayName "Expo Metro 8081" -Direction Inbound -Protocol TCP -LocalPort 8081 -Action Allow -Profile Private
 ```
 
-Pra testar com duas contas sem ficar entrando e saindo, `db/snippets-teste.sql` tem os atalhos: aprovar vínculo, emitir e reciclar código de fundação, promover a síndico.
+Pra testar com duas contas sem ficar entrando e saindo, `db/snippets-teste.sql` tem os atalhos: aprovar vínculo, emitir e reciclar código de fundação, promover a síndico. Com o modo demonstração ligado, trocar de papel é mais rápido ainda: Perfil → tocar no papel.
 
 ---
 
@@ -73,24 +119,46 @@ Chaves da API: usar sempre as novas (`sb_publishable_...` / `sb_secret_...`), n�
 
 ```
 varanda-app/
-├── App.tsx                          — auth gate + tab navigator (mostra aba Gestão só se papel === 'sindico')
+├── App.tsx                          — auth gate + CondominioProvider + tab navigator com ícones
+│                                        (Oficial · Mural · Solicitações · Gestão). Perfil NÃO é
+│                                        aba: abre pelo avatar do cabeçalho
 ├── db/
 │   ├── varanda-schema.sql           — DDL completo, idempotente. FONTE DA VERDADE do banco.
-│   ├── migracao-cargos.sql          — PENDENTE de rodar no Supabase; apagar depois de aplicada
+│   ├── migracao-mural.sql           — PENDENTE de rodar no Supabase; apagar depois de aplicada
+│   ├── migracao-privacidade.sql     — PENDENTE; manutenção privada + salão individual
+│   ├── seed-demo.sql                — condomínio fictício da apresentação; re-executável
 │   └── snippets-teste.sql           — atalhos de SQL pro teste manual (não é migração)
+├── components/
+│   ├── ui.tsx                       — Botao, Link, Avatar, Cartao, Campo, Chip, Etiqueta,
+│   │                                    Seletor, Secao, Vazio, Carregando, EspacoTopo
+│   ├── CabecalhoApp.tsx             — cabeçalho fixo das abas: avatar (abre o Perfil em modal),
+│   │                                    nome + unidade + cargo, e o menu de três pontinhos
+│   ├── Calendario.tsx               — grade de mês com datas indisponíveis riscadas. Existe
+│   │                                    porque o DateTimePicker nativo não desabilita dia solto
+│   ├── FolhaExpandida.tsx           — folha de meia tela com alcinha, arrastar-para-baixo e
+│   │                                    fundo escurecido. Formato único de "abrir um item":
+│   │                                    post, aviso, reunião e votação
+│   └── AvisoRapido.tsx              — balão de confirmação que some sozinho; provider + hook
 ├── lib/
 │   ├── supabase.ts                  — client Supabase configurado pra RN
-│   ├── datas.ts                     — formatarDataHora(), sem depender de Intl
-│   └── useMeuCondominio.ts          — hook: situacao do onboarding + condominioId, unidadeId,
-│                                        papel, cargo, ehSindico/podeGerir/podeFiscalizar
+│   ├── tema.ts                      — cores, espaco, raio, fonte, sombra (tokens visuais)
+│   ├── demo.ts                      — flag EXPO_PUBLIC_DEMO, os 4 perfis e entrarComoDemo()
+│   ├── datas.ts                     — formatação de data/hora sem Intl
+│   ├── gestos.ts                    — useToqueDuplo(): separa toque simples de duplo
+│   └── useMeuCondominio.tsx         — CondominioProvider + useMeuCondominio: situacao do
+│                                        onboarding, condominioId/Nome, unidadeId/Rotulo,
+│                                        papel, cargo, rotuloConta, fotoUrl,
+│                                        ehSindico/podeGerir/podeFiscalizar
 ├── screens/
 │   ├── AuthScreen.tsx                — cadastro/login (só e-mail e senha)
 │   ├── EntradaScreen.tsx             — onboarding: perfil → convite ou fundação → espera aprovação
 │   ├── MuralScreen.tsx               — feed social (posts)
-│   ├── SolicitacoesScreen.tsx        — host com seletor Sugestões/Problemas/Salão
-│   ├── ReservasScreen.tsx            — pedir reserva do salão; síndico aprova/recusa na mesma tela
-│   ├── SugestoesScreen.tsx
-│   ├── ProblemasScreen.tsx
+│   ├── SolicitacoesScreen.tsx        — host com sub-abas Salão/Manutenção e o botão + que
+│   │                                    escolhe o tipo e abre o formulário daquele tipo
+│   ├── ReservasScreen.tsx            — lista do salão + aprovação do síndico; exporta
+│   │                                    FormularioSalao, usado pelo +
+│   ├── ManutencaoScreen.tsx          — lista de pedidos de conserto (tabela `problemas`);
+│   │                                    exporta FormularioManutencao, usado pelo +
 │   ├── OficialScreen.tsx             — visão condômino: regras, avisos, votações (votar), reuniões (RSVP)
 │   ├── RegrasScreen.tsx              — card de leitura das regras, renderizado dentro do Oficial
 │   ├── RegrasEditarScreen.tsx        — síndico edita as regras (dentro de Gestão)
@@ -99,7 +167,7 @@ varanda-app/
 │   ├── UnidadesScreen.tsx            — síndico cadastra unidades em lote e compartilha convites
 │   ├── CondominosScreen.tsx          — síndico vê quem entrou, unidade por unidade
 │   ├── VinculosPendentesScreen.tsx   — síndico aprova vínculo pendente
-│   ├── ModerarScreen.tsx             — síndico muda status de sugestão/problema
+│   ├── ModerarScreen.tsx             — fila de manutenção do síndico: status e arquivo
 │   └── PerfilScreen.tsx
 ```
 
@@ -155,6 +223,18 @@ Cargos (subsíndico e conselho fiscal) e canal restrito, **migração `db/migrac
 - `restrito boolean` em `avisos`, `votacoes` e `reunioes`: o canal do gabinete. A policy de select vira `condominio_id in (...) and (not restrito or pode_fiscalizar(condominio_id))`.
 - **Armadilha nova, e a mais importante desta leva:** as policies de `votos`, `rsvps`, `curtidas` e `comentarios` reconferiam só o condomínio do pai, nunca a visibilidade dele. Sem repetir a cláusula de `restrito` dentro delas, o vizinho não veria a votação restrita mas leria os votos dela. Foram reescritas junto — e o mesmo cuidado vale pra qualquer restrição futura (relato confidencial vai cair exatamente aqui).
 
+Trocar o voto, **migração `db/migracao-votos.sql` pendente** e já dobrada no schema:
+- policy de `update` em `votos`. Voto é **por unidade**, então quem troca não precisa ser quem lançou: qualquer morador aprovado da mesma unidade pode. É o voto do 302, não o do Fulano. O `with check` grava `usuario_id = auth.uid()`, registrando quem trocou por último.
+- **Sem policy de delete, de propósito:** dá pra *trocar* o voto, não pra retirá-lo. Retratar-se para "não votei" mudaria o denominador do quórum, e isso é decisão de assembleia, não de tela.
+- **Apuração só pro gabinete.** A policy de select liberava o condomínio inteiro: um morador comum lia pela API não só o placar como **qual unidade votou o quê**. O voto nunca foi secreto — a tela é que não mostrava. Agora cada um enxerga o voto da própria unidade (a tela precisa saber o que marcar) e quem `pode_fiscalizar()` enxerga todos. O conselho entra junto de propósito: conferir apuração é o que o cargo existe pra fazer.
+- A policy de insert nunca checou o prazo — a tela sempre filtrou por `data_fim`, mas nada impedia votar em votação encerrada direto pela API. Corrigido junto: com insert e update coexistindo, critérios diferentes divergiriam.
+
+Solicitação privada, **migração `db/migracao-privacidade.sql` pendente** e já dobrada no schema:
+- `area_comum boolean not null default true` em `problemas`. Default `true` de propósito: a visibilidade pública é o que entrega dedup e pressão (ver *Status atual*), e quem não pensar no assunto publica pro prédio.
+- A policy de select de `problemas` virou `condominio_id in (...) and (area_comum or autor_id = auth.uid() or pode_gerir(condominio_id))`, e a de `historico_status` repete a cláusula inteira — armadilha nº8, mesma dos votos da votação restrita.
+- **`pode_gerir()` e não `pode_fiscalizar()`**, aqui e nas reservas. É a única exceção do app, e é decisão do Vitor: conselho fiscal fiscaliza contas, não queixa doméstica nem festa de vizinho.
+- A policy de select de `reservas` passou a exigir unidade própria ou `pode_gerir()`. Como consequência o cliente perdeu a leitura de que precisava pro calendário, e entrou `datas_ocupadas(condominio, de, ate)` — `security definer`, devolve só as datas das reservas **aprovadas**, com a checagem de chamador da armadilha nº14. As pendentes não bloqueiam: disputa de data é o que dá ao síndico a escolha entre dois pedidos.
+
 **Sobre `telefone` e `foto_url` (era decisão em aberto, resolvida em 20/08/2026):** RLS é por linha, não por coluna, então a policy que deixa o vizinho ver seu `nome` libera a linha inteira de `usuarios` — telefone e foto junto. Mas ao implementar a lista de condôminos ficou claro que **nenhuma tela do app lê ou escreve essas duas colunas**: são colunas mortas desde o schema original, e não há telefone nenhum no banco pra vazar. A exposição é teórica.
 
 Fica registrado pra quando deixar de ser: **no dia em que existir cadastro de telefone, mover contato pra tabela separada com policy própria** — a lista de condôminos já está preparada, ela não exibe contato hoje.
@@ -170,6 +250,23 @@ Fica registrado pra quando deixar de ser: **no dia em que existir cadastro de te
 7. **`toISOString()` em coluna `date`**: converte pra UTC, então à noite no Brasil (UTC-3) a data pula pro dia seguinte — uma reserva pedida dia 20 às 22h viraria dia 21. Usar `paraDataISO()` de `lib/datas.ts`, que monta `YYYY-MM-DD` a partir dos componentes locais. Mesmo cuidado ao ler: `formatarDataCurta()` não passa por `Date` com fuso.
 8. **Filho não herda visibilidade do pai em RLS.** As policies de `votos`, `rsvps`, `curtidas` e `comentarios` são do tipo `pai_id in (select id from pai where condominio_id in (...))` — elas reconferem o *condomínio*, não se você pode ver aquele pai. Toda vez que uma restrição nova entrar no pai (restrito, confidencial, o que for), a mesma cláusula precisa ser repetida nas policies dos filhos, senão o conteúdo vaza pela borda: a votação some da tela e os votos dela continuam legíveis.
 9. **`.env` do Expo**: variáveis precisam do prefixo `EXPO_PUBLIC_` pra chegar no client. Mudança no `.env` só é lida reiniciando o servidor (`npx expo start -c`).
+10. **`toLocaleDateString`/`toLocaleString('pt-BR')` continuavam espalhados** por `OficialScreen`, `ReservasScreen` e `OficialCriarScreen`, mesmo com `lib/datas.ts` existindo justamente pra evitar `Intl` (o suporte varia no Hermes). Removidos em 21/08 e substituídos por `formatarCompromisso()` e `formatarData()`. Se aparecer um `toLocale*` novo, é regressão.
+11. **Trocar a conta logada não recarregava o app.** `AppLogado` continuava montado quando a sessão mudava, e o `useMeuCondominio` de dentro só roda o efeito na montagem — ao sair de síndico pra morador, a aba Gestão seguia aberta com os dados do papel anterior. Resolvido com `key={session.user.id}` no `AppLogado`, que força a remontagem. Só apareceu porque o modo demonstração troca de conta a toda hora; o bug era latente antes disso.
+12. **`current_date` e `date_trunc('day', now())` no Supabase respondem em UTC**, porque a TimeZone da sessão é UTC. Marcar uma reunião pras "19h" desse jeito agenda pras 16h de Brasília. Em SQL, converter: `(... at time zone 'America/Sao_Paulo')`. É o primo do `toISOString()` da armadilha nº7, do outro lado da fronteira.
+13. **Um morador comum não consegue ler `vinculos` dos vizinhos.** A policy só libera a linha pro próprio dono e pra quem `pode_fiscalizar()`. Como `papel = 'sindico'` mora ali, não havia como o app dizer "fulano é o síndico" pra quem não é do gabinete. Resolvido com o RPC `papeis_do_meu_condominio()`, `security definer`, que devolve **só o rótulo** — abrir a policy de select de `vinculos` pro prédio inteiro resolveria também, mas entregaria unidade e status do vínculo de todo mundo junto. Se aparecer uma pergunta parecida ("quem é X?"), o padrão é esse: função que devolve o mínimo, não policy que abre a tabela.
+14. **`security definer` sem checar o chamador é vazamento entre condomínios.** `papeis_do_condominio()` aceita qualquer `condominio_id`; por isso ela não tem `grant` pra `authenticated` e só é alcançável pela `papeis_do_meu_condominio()`, que filtra por `condominios_do_usuario()`. Toda função `security definer` nova precisa da mesma pergunta: *quem pode chamar isso, e com que argumento?*
+15. **Cada tela chamando `useMeuCondominio()` era uma consulta por tela.** Ficou insustentável quando o cabeçalho passou a aparecer em todas as abas (duas por aba, e o nome piscando "Carregando..." a cada troca). Virou `CondominioProvider`, montado uma vez por sessão em `App.tsx`. O `key={session.user.id}` continua sendo o que força o recarregamento na troca de conta.
+16. **Toque duplo custa um atraso no toque simples.** Se a mesma superfície tem ação de toque simples e de duplo, o simples precisa esperar a janela do duplo fechar (~260ms) — senão o primeiro toque do duplo já disparou a ação simples. `useToqueDuplo` em `lib/gestos.ts` faz isso; onde não há ação simples (post já aberto), o duplo responde na hora. E o timer precisa ser cancelado no unmount, senão dispara sobre um componente que já saiu da árvore.
+17. **`PanResponder` lê estado por closure e congela no primeiro valor.** Ele é criado uma vez; qualquer coisa mutável que ele consulte (como "a lista de comentários está no topo?") tem que morar em `useRef`, não em `useState`. Com estado, o gesto de arrastar-para-fechar responderia para sempre ao valor do primeiro render.
+18. **Inset inferior não entra na conta de elemento flutuante dentro de tela com barra de abas.** O FAB do Mural estava com `bottom: espaco.lg + insets.bottom` e ficava visivelmente alto: a barra de abas já consome o inset, então somar de novo é contar duas vezes. Vale pra qualquer coisa posicionada em relação ao rodapé de uma tela que vive dentro do tab navigator.
+19. **Função nova via `.rpc()` não aparece sem recarregar o cache do PostgREST.** Criar a função no banco não basta: a API responde `could not find the function ... in the schema cache` até ele reiniciar sozinho. O conserto é `notify pgrst, 'reload schema';` no fim da migração — está no fim de `varanda-schema.sql` e de toda migração que crie função exposta.
+20. **`PanResponder` puro NÃO consegue arrastar-para-fechar por cima de um `ScrollView` no Android. Não insista.** Foram três tentativas em 21/08/2026: gatilho de 12px, depois 3px (abaixo do slop nativo de ~8px), com `onMoveShouldSetPanResponderCapture` num ancestral. Nenhuma funcionou — o ScrollView do Android intercepta o toque no nível nativo (`onInterceptTouchEvent`), fora do sistema de responder do JS, então o ancestral nunca é consultado. **A única saída real é `react-native-gesture-handler`** (funciona no Expo Go, mas é dependência nova e hoje nem ele nem o `reanimated` estão instalados). Enquanto isso, a FolhaExpandida oferece três saídas que funcionam: tocar no fundo escurecido, tocar na faixa da alcinha, e arrastar a alcinha.
+21. **A mesma condição também precisa cobrir "não rola de jeito nenhum".** Checar só `contentOffset.y <= 2` deixa de fora a lista curta demais pra rolar, que nunca emite evento de rolagem. `onContentSizeChange` + `onLayout` respondem antes se a área é *sequer* rolável.
+22. **Esconder na tela não é esconder.** Duas vezes nesta sessão o pedido foi "fulano não deve ver X" e a resposta certa não era mexer na tela: o conselho fiscal em `cargos`, e a apuração em `votos`. Nos dois casos a tabela seguia legível pela API e bastava um cliente HTTP pra ler tudo. A pergunta a fazer sempre: *se a pessoa chamasse a API na mão, o que voltaria?*
+23. **Restaurar o valor animado antes de desmontar pisca a tela.** O `fechar()` fazia `deslocamento.setValue(0)` e só então chamava `aoFechar()` — a folha reaparecia inteira por um quadro antes de o pai removê-la. Como o componente é remontado do zero na abertura seguinte, não há o que restaurar: basta não mexer no valor.
+24. **`\n` dentro de heredoc de shell vira quebra de linha real** e parte a string do TypeScript. Aconteceu duas vezes nesta sessão ao editar arquivo por script. Para texto com `\n`, editar com a ferramenta de edição direta em vez de heredoc.
+25. **O `DateTimePicker` nativo não desabilita datas soltas.** Ele só aceita `minimumDate` e `maximumDate` — não há como riscar o dia 20 e deixar o 19 e o 21 clicáveis. Onde o requisito é "mostre o que está ocupado antes de pedir" (reserva do salão), ele não serve, e a saída foi uma grade de mês escrita à mão em `components/Calendario.tsx`. Continua sendo o componente certo pra reunião, onde qualquer dia serve e ainda há hora junto.
+26. **`@expo/vector-icons` vem com o `expo` mas não hoistado** — mora em `node_modules/expo/node_modules/`, então `import ... from '@expo/vector-icons'` no código do app não resolve pelo Metro. Precisa de `npx expo install @expo/vector-icons` pra subir de nível. Vale pra qualquer dependência transitiva do Expo que você queira importar direto.
 
 ## Status atual
 
@@ -194,6 +291,95 @@ Corrigido nesta sessão:
 - **Regras do condomínio** (Fase 3): leitura no topo do Oficial (card que expande, com versão e quem atualizou), edição em Gestão › Regras, e o aviso automático garantido pelo RPC. Migração aplicada e exercitada no celular ainda nesta sessão.
 - **Subsíndico, conselho fiscal e canal restrito do Oficial** (Fase 3): decisão do Vitor de dar ao subsíndico os quatro blocos de poder, inclusive governança, reservando só a atribuição de cargo ao síndico. Conselho fiscal entra como leitura ampliada — a Gestão dele abre com faixa "somente leitura" e o `ModerarScreen` ganhou `somenteLeitura`, que troca os botões de status por etiqueta. **Migração ainda não aplicada.**
 
+**Sessão de 21/08/2026 — modo demonstração e passada de layout.** O objetivo do momento deixou de ser "piloto" e virou "apresentação" (ver *Onde retomar*). O que entrou:
+
+- **Modo demonstração** (`lib/demo.ts`, flag `EXPO_PUBLIC_DEMO=1`): atalhos de "entrar como Síndico / Subsíndico / Conselho / Morador" na tela de login, e um seletor de papel dentro do Perfil pra alternar em dois toques durante a conversa. As contas são **reais** e o login é o `signInWithPassword` normal, de propósito: o que o morador comum não vê, não vê porque o RLS recusou. Se fosse estado falso no client, seria só UI escondendo botão — e é justamente a diferença que vale demonstrar. O flag é assado no build, então uma build sem ele não tem como mostrar os atalhos.
+- **`db/seed-demo.sql`**: o Edifício Alvorada, com 6 unidades, 4 moradores, 1 vínculo pendente, mural com comentários e curtidas, 3 sugestões, 3 problemas cobrindo as três cores do badge de SLA, 4 avisos (um restrito), 2 votações (uma restrita, com voto já lançado), 3 reuniões (uma restrita, uma cancelada), 2 reservas (uma pendente pra aprovar ao vivo) e o regimento em versão 2. **O conteúdo é texto de venda, não fixture** — "post de teste 1" destruiria a demonstração. Todas as datas são relativas a `now()`, senão o seed envelhece e o "aberto há X dias" mente.
+- **Passada de layout**: `lib/tema.ts` com os tokens (a paleta já existia espalhada em 15 arquivos, e já divergia — "perigo" era `#B6512E` em umas telas e `#B4483C` em outras) e `components/ui.tsx` com as peças compartilhadas. O ganho maior foi trocar o `Button` do React Native, que não aceita estilo e renderiza azul e em caixa alta no Android, ignorando a paleta inteira. Também: `paddingTop: 60` chumbado virou safe-area de verdade, a barra de abas ganhou ícones, e todo estado vazio ganhou ícone e uma frase que diz o que fazer.
+- `screens/EmBreveScreen.tsx` apagado — nenhuma tela importava.
+
+**Reforma de navegação e do Mural (21/08/2026, ainda na mesma sessão).** Pedido do Vitor depois de ver a primeira versão no celular:
+
+- **Abas na ordem Oficial · Mural · Solicitações · Gestão**, e **Perfil deixou de ser aba**. Agora todas as abas compartilham o `CabecalhoApp`: avatar à esquerda (toque abre o Perfil como modal de tela cheia), nome com unidade e cargo embaixo ("Helena Prado · 101 · Síndico"), e o menu de três pontinhos à direita com Conta, Privacidade, Preferências e Notificações marcados *em breve*, mais Sair funcionando. Não há stack navigator no projeto e o Perfil abrir como `Modal` evitou adicionar uma dependência de navegação só pra isso.
+- **Mural reescrito no formato WhatsApp/Facebook**: sem caixa de escrever no topo (o topo é pra ler), um **+** flutuante no canto inferior que abre o pop-up de publicação; card com corte em 220 caracteres e "Ler mais"; horário na mesma linha do nome, à direita; **cargo do autor embaixo do nome**; curtida virou **joinha**, e os botões de interação viraram uma barra dividida ao meio, com ícone, rótulo e 48px de altura.
+- **Post aberto vira modal com o post ancorado no topo e os comentários rolando embaixo** — tocar no post ancorado recolhe. A âncora tem teto de 55% da tela e rola por dentro: sem isso um post comprido empurraria os comentários pra fora e ninguém saberia que existem.
+- **Conselho fiscal deixou de ser público.** A tabela `cargos` nasceu legível pelo condomínio inteiro, com o argumento de que "cargo oculto gera desconfiança em assembleia". Decisão do Vitor: o morador precisa saber a quem recorrer — síndico e subsíndico — e o conselho não é isso. Mudou a policy junto com a função, senão esconder na função seria teatro (a tabela seguiria legível pela API).
+- **Ideia descartada no meio do caminho:** título no post. Chegou a virar coluna `posts.titulo` na migração e o Vitor cortou em seguida — post de mural é recado curto, título só adiciona atrito na hora de escrever.
+
+**Segunda rodada de ajustes (21/08/2026), depois do Vitor ver as telas no celular:**
+
+- **Mural — gestos.** O post aberto ganhou uma setinha (∨) no topo: tocar fecha, e **arrastar pra baixo fecha progressivamente**, acompanhando o dedo. Tocar no texto do post deixou de fechar — só a setinha fecha, pra dar pra reler sem o card sumir embaixo do dedo. Um **swipe pra baixo na área dos comentários** também fecha, mas só quando a lista já está no topo (senão rolar comentário fecharia o post). **Duplo toque curte**, no feed e no post aberto. O botão **+** estava alto demais: o inset inferior estava sendo somado por cima da barra de abas, que já o consome.
+- **Oficial virou sub-abas** — Avisos · Reuniões · Votações · Regras, numa segunda barra encostada por cima da barra de abas do app, com Avisos como padrão. As seções deixaram de ser títulos empilhados num scroll longo e viraram destinos.
+- **Cards do Oficial expandem**: mesmo corte de 220 caracteres do Mural, "Ler mais", e a mesma setinha (∨) pra fechar. Fechado, tocar em qualquer lugar abre; aberto, só a setinha fecha. Ações (votar, confirmar presença) ficam sempre visíveis, abertas ou não — escondê-las atrás da expansão custaria um toque a mais no que é o objetivo da tela.
+- **Duas regras novas de destaque, garantidas no banco:** um aviso fixado por vez (gatilho) e aviso restrito não pode ser fixado (check constraint). Viraram invariante e não disciplina de tela porque **três** caminhos diferentes criam aviso fixado — o formulário do síndico, o RPC `salvar_regras` quando o regimento muda, e o cancelamento de reunião. Garantir na UI seria lembrar nos três e esquecer no quarto. Borda esquerda roxa nos restritos, na mesma cor da etiqueta.
+- **Regras deixou de ser card.** É documento pra ler de ponta a ponta, então saiu a estética clicável (sombra, borda, "Ler tudo") e entrou tipografia de leitura: 16px com entrelinha 26.
+- **Foto de perfil ficou no backlog e fora do roadmap**, por decisão explícita do Vitor. O `Avatar` já lê `usuarios.foto_url`; falta upload.
+
+**Terceira rodada (21/08/2026) — fechar tinha que ser fácil.** O Vitor testou e o arrasto pra fechar não pegava, e a área da setinha exigia mira. O conserto virou um componente só, `components/FolhaExpandida.tsx`, usado pelo Mural e pelo Oficial:
+
+- **Faixa de fechar de ponta a ponta** no topo, com alcinha e setinha: o alvo é a faixa inteira, não o ícone.
+- **Três saídas** pro mesmo gesto: tocar na faixa, arrastar a faixa, ou arrastar pra baixo na área de conteúdo quando ela está no topo da rolagem.
+- **O bug do swipe**: a decisão olhava só `contentOffset.y`, e lista curta demais pra rolar nunca emite evento de rolagem. Agora `onContentSizeChange` + `onLayout` dizem se a área é sequer rolável — e quando não é, o arrasto vale sempre.
+- **Avisos, reuniões e votações abrem em tela cheia**, no mesmo formato do post do Mural, com tipografia de leitura (título 22, corpo 17/27) em vez da de lista. A expansão em cartão, feita na rodada anterior, foi substituída.
+- Os três tipos do Oficial passaram a compartilhar uma forma comum (`ItemOficial`), com um card fechado e uma folha aberta só — antes seriam três cards e três folhas quase iguais se afastando com o tempo.
+- **O arrasto de conteúdo é aplicado pelo chamador, não pela folha.** No Mural o texto do post ancorado rola por conta própria, e ali o gesto pra baixo tem que rolar, não fechar.
+
+**Quarta rodada (21/08/2026) — a folha virou meia tela.** Três correções e uma mudança de forma:
+
+- **O swipe nunca funcionou por corrida de gesto**, não por threshold. O `ScrollView` do Android reivindica o toque a ~8px de deslocamento e o gatilho estava em 12px: quando ele era avaliado, a lista já tinha o gesto. Baixado pra 3px. Diagnóstico feito por leitura — **não verificado em aparelho**.
+- **Piscada de um quadro ao fechar**: o `fechar()` restaurava o valor animado antes de chamar `aoFechar()`, e a folha reaparecia inteira antes de sumir. Como ela é remontada do zero na abertura seguinte, bastou não restaurar.
+- **Folha ocupa ~58% da tela**, ancorada embaixo, com cantos arredondados e fundo escurecido em cima. A alcinha passou a ficar no meio da tela, ao alcance do polegar sem reposicionar a mão — e o fundo escurecido virou uma quarta saída, com metade da tela de alvo.
+- Saíram a setinha e a faixa bege do topo: com meia tela, a alcinha sozinha já diz o que fazer, e o respiro de status bar deixou de existir.
+
+**Quinta rodada (21/08/2026) — confirmar presença.**
+
+- **O delay não era da rede, era do refetch.** O `toggleRsvp` gravava e então chamava `carregar()`, que refaz **cinco** consultas (avisos, votações, votos, reuniões, rsvps) só pra descobrir um booleano que o app já sabia. Agora ele atualiza o `Set` local e devolve se deu certo.
+- **Estado de "salvando"** no botão, porque a gravação ainda passa pela rede: sem ele o botão fica inerte entre o toque e a resposta, e a pessoa toca de novo.
+- **Botão de presença virou barra de ponta a ponta no rodapé da folha**, na mesma posição do campo de comentário do Mural — onde o polegar já está. No card da lista continua a versão compacta.
+- **`components/AvisoRapido.tsx`**: balão de confirmação que aparece, some sozinho em 2,6s, não bloqueia nada (`pointerEvents="none"`) e é antecipado por qualquer toque. O "qualquer toque" vem de um farejador — um `onStartShouldSetResponderCapture` que devolve `false`, sendo consultado em todo toque sem interceptar nenhum.
+- **Há dois providers de AvisoRapido, de propósito.** Modal do React Native é uma janela nativa separada: um balão montado na árvore principal fica *atrás* de qualquer folha aberta. A FolhaExpandida monta o próprio, e o `useAvisoRapido` resolve pelo mais próximo — quem dispara de dentro da folha mostra na folha, quem dispara do card mostra na tela.
+- **O swipe-para-fechar sobre lista continua não funcionando** e foi aceito assim pelo Vitor. Ver armadilha nº20: não é ajustável por threshold, precisa de `react-native-gesture-handler`.
+
+**Sexta rodada (21/08/2026) — votação no formato de enquete.**
+
+- **Dá pra trocar o voto** enquanto a votação está aberta. Precisou de policy nova: `votos` só tinha select e insert, então trocar era impossível pela API, não só pela tela.
+- **Opções no formato do WhatsApp**: marcador circular à esquerda, contagem à direita, barra de proporção embaixo. O resultado fica visível *enquanto* se vota — é o que faz a pessoa voltar na votação em vez de esquecer que votou.
+- Para isso o app passou a ler **todos** os votos visíveis, não só os da própria unidade. Uma consulta no lugar de duas, e o RLS já limita o que aparece: votação restrita não vem pra quem não é do gabinete, e os votos dela também não.
+- Mesmo tratamento do RSVP: estado de salvando por opção, atualização local em vez de refetch, e balão de "Voto registrado" / "Voto alterado".
+- O texto "Depois de votar não dá pra trocar" saiu de cena, junto com a regra.
+
+**Sétima rodada (21/08/2026) — morador não vê apuração.** O pedido parecia de tela e era de banco: a policy de select de `votos` liberava o condomínio inteiro desde sempre, então um morador comum lia pela API não só o placar como **qual unidade votou o quê**. O voto nunca tinha sido secreto; a tela é que não mostrava.
+
+Agora cada um lê o voto da própria unidade — a tela precisa disso pra saber o que marcar — e quem `pode_fiscalizar()` lê todos. Na interface, sem apuração some a contagem e some a barra: barra vazia pareceria "zero votos", que é informação, e justamente a que não pode aparecer.
+
+**Oitava rodada (21/08/2026) — Solicitações reorganizada, e Sugestões saiu do app.**
+
+Decisão do Vitor, e a mais estrutural desta sessão. O raciocínio: **"solicitação" carrega um contrato** — eu peço, alguém decide, tem um estado. Sugestão não tem isso: é proposta em busca de adesão, e adesão o Mural já resolve melhor, com curtida, comentário e o prédio inteiro vendo.
+
+- **Sugestões deixou de existir.** As ativas viraram posts (`db/migracao-solicitacoes.sql`); as arquivadas ficaram onde estavam, porque o síndico as tirou de circulação de propósito e o Mural não tem arquivo. Apoios viraram curtidas — as duas tabelas são pares `(item, usuário)`. A categoria se perdeu: era lista fixa imposta pelo app, não algo que o morador escreveu.
+- **Problemas ficou, virou "Manutenção".** Eu discordei da remoção dele e o Vitor concordou: relatar um vazamento é *pedir um conserto*, não conversar. Tem estado, prazo e alguém do outro lado. Some junto se fosse embora: o badge "aberto há X dias" (que é a resposta do app à queixa nº1 contra síndico), o histórico de status, a fila do síndico e o arquivamento. **A tabela continua se chamando `problemas`** — renomear arrastaria policies, a FK de `historico_status` e o seed, sem ganho.
+- **Solicitações = Salão · Manutenção**, em sub-abas no formato do Oficial, e mais dois tipos anunciados como *em breve* (troca de vaga, alteração de dados).
+- **A criação saiu das listas e virou um botão +**, como no Mural: escolhe o tipo, preenche o formulário daquele tipo, envia. Isso devolveu o topo de cada lista pro conteúdo — o Salão gastava um card inteiro de formulário. Os "em breve" moram na folha do +, não como sub-abas vazias: o momento em que a pessoa pergunta "o que dá pra pedir?" é exatamente ao tocar no +.
+- `ModerarScreen` deixou de ser genérico sobre `tipo` — com um tipo só, a generalização só atrapalhava a leitura.
+
+**Fica registrado o que se perdeu**, porque a decisão foi consciente: o relato confidencial em Problemas (item da Fase 3, vindo de pesquisa sobre conflito de vizinhança exposto publicamente) continua possível, já que Manutenção sobreviveu. Mas sugestão com status formal — "em análise / aprovada / implementada" — não existe mais: um post não tem desfecho registrado.
+
+**Sessão de 22/08/2026 — solicitação privada.** Os dois itens que a sessão anterior deixou decididos e por escrever. São a mesma ideia aplicada a duas telas: *nem todo pedido é assunto do prédio*.
+
+- **Manutenção ganhou "área comum" vs. "minha unidade"**, coluna `area_comum` com default `true`. O default não é preguiça: a visibilidade pública é o que entrega **dedup** (três vizinhos relatando o mesmo portão sem saber uns dos outros geram três chamados e a sensação de que ninguém liga) e **pressão** (o badge "aberto há X dias" só cobra porque o prédio vê o número). O privado é a exceção — a torneira do próprio banheiro, que nunca precisou de plateia.
+- **O interruptor virou a primeira pergunta do formulário**, não a última. O alcance muda o jeito de descrever o resto: quem vai relatar a torneira da própria suíte não deveria escrever "Bloco B, 6º andar" no campo Onde. Os placeholders acompanham a escolha.
+- **Conselho fiscal fica de fora do pedido privado**, por decisão do Vitor: ele fiscaliza contas, não queixa doméstica. É a única cláusula do app que usa `pode_gerir()` onde `pode_fiscalizar()` pareceria a escolha natural.
+- **A armadilha nº8 mordeu como previsto.** `historico_status` é filho de `problemas` e a policy dele só reconferia o condomínio. Sem repetir a cláusula de `area_comum` lá, o pedido privado sumiria da tela e o histórico dele continuaria legível pela API. Foi reescrita junto, na mesma migração.
+- **De brinde, isso entrega o relato confidencial da Fase 3.** Era item de roadmap vindo de pesquisa sobre conflito de vizinhança exposto publicamente; sobrou só o rótulo, e nem ele — "minha unidade" diz melhor o que é.
+
+- **A lista do Salão passou a mostrar só as reservas da própria unidade.** Síndico e subsíndico veem todas. Eu tinha argumentado que reserva não podia ser privada, porque a lista pública é o que informa se o dia 20 está livre; o Vitor derrubou o argumento: se as datas ocupadas vierem desabilitadas no seletor, a disponibilidade é entregue pelo **calendário**, não pela lista.
+- **`datas_ocupadas(condominio, de, ate)`**, `security definer`, devolve **só as datas** — sem unidade, sem nome, sem motivo. Com a policy fechada o cliente não consegue mais ler as reservas dos outros pra saber o que bloquear, e abrir a policy de volta entregaria tudo o que acabou de ser escondido. Mesmo padrão de `papeis_do_meu_condominio`, e mesma checagem de chamador da armadilha nº14. Só as **aprovadas** bloqueiam: pendentes concorrentes na mesma data são o que dá ao síndico a escolha entre dois pedidos.
+- **O seletor de data virou `components/Calendario.tsx`, escrito à mão.** O `DateTimePicker` nativo só aceita `minimumDate`/`maximumDate` — não existe como riscar um dia solto no meio do mês (armadilha nº25). `react-native-calendars` faria de fábrica, e foi descartado: o projeto já recusou dependência nova em situação parecida, e grade de mês é aritmética de calendário, não física de gesto. São ~60 linhas de lógica. **É o item mais arriscado da sessão** — componente novo que nunca rodou em aparelho.
+- **O calendário bloqueia as duas regras, não uma.** Os índices parciais do banco são dois: salão já reservado (qualquer unidade) e esta unidade já pediu esta data. Os dois estouram o mesmo 23505, então desenhar só um deixaria o morador batendo no erro do outro. Recusada não bloqueia — é justamente a data que dá pra pedir de novo.
+- O tratamento de 23505 ficou como **rede de segurança**, para o caso de alguém aprovar a data entre abrir o formulário e enviar. A mensagem mudou de acordo: "alguém garantiu essa data enquanto você preenchia".
+- **Isso mata a decisão que estava pendente sobre o motivo da reserva:** sem lista pública não há o que esconder, e `observacao` não precisa sair pra tabela separada.
+- O seed ganhou um **quarto pedido de manutenção, privado**, do Caio (a conta "Morador"). É o que faz a régua aparecer na demonstração: síndico e subsíndico veem com etiqueta, o autor vê, o **conselho fiscal não vê**.
+
 Ambiente: decidido em 20/08/2026 continuar testando **só no celular**. Não há SDK Android na máquina (os quatro Unity instalados estão sem o módulo AndroidPlayer), e emulador custaria ~10 GB. Expo Web foi descartado porque `react-native-web` não implementa `Alert`, e este app usa `Alert.alert` para todo feedback de erro e toda confirmação destrutiva — testar lá esconderia justamente a classe de bug mais comum aqui. O emulador só passa a valer quando a dor for testar síndico e morador lado a lado.
 
 MVP funcionalmente completo e testado (antes desta sessão): cadastro → vínculo por código de convite → aprovação pelo síndico → Mural, Sugestões (com apoio), Problemas (com histórico de status), Oficial (avisos fixados, votação por unidade, reunião com RSVP e seletor de data/hora nativo) → Gestão do síndico pra tudo isso.
@@ -217,7 +403,8 @@ Vitor — dev de jogos mobile (Unity/C#), sem familiaridade prévia com Supabase
 - [x] Comentários no feed — card expande com a lista de comentários e campo pra escrever; síndico remove comentário individual. A tabela `comentarios` existia desde o schema original sem nenhuma tela usando
 - ~~Respostas em thread~~ **descartado em 20/08/2026** — a estrutura plana de comentários resolve. Aninhar comentário dentro de comentário adiciona coluna nova, recursão na UI e confusão pro morador, sem ganho real numa conversa de condomínio
 
-### Sugestões
+### Sugestões — DESCONTINUADO em 21/08/2026
+Virou post no Mural. Ver *Status atual*. O que existia:
 - [x] Retirar apoio — o `toggleApoio` já fazia o delete desde sempre, mas faltava a policy; agora funciona e detecta bloqueio de RLS
 
 ### Reuniões
@@ -225,7 +412,9 @@ Vitor — dev de jogos mobile (Unity/C#), sem familiaridade prévia com Supabase
 - [x] Síndico poder cancelar reunião, com opção de mandar aviso junto — cancelamento é **soft** (`cancelada_em`), porque quem confirmou presença precisa ver que foi cancelada; apagar faria a reunião sumir em silêncio
 
 ### Reserva de salão
-- [x] Gestão e pedido de reserva do salão — aba "Salão" dentro de Solicitações. O bloqueio de data conflitante é garantido por índice parcial no banco, e o app traduz o erro 23505 numa mensagem que o morador entende. Síndico aprova/recusa na mesma tela, sem aba própria em Gestão
+- [x] Gestão e pedido de reserva do salão — aba "Salão" dentro de Solicitações. O bloqueio de data conflitante é garantido por índice parcial no banco. Síndico aprova/recusa na mesma tela, sem aba própria em Gestão
+- [x] Reserva é da unidade, não do prédio — a lista mostra só as reservas da própria unidade; síndico e subsíndico veem todas
+- [x] Calendário com as datas ocupadas riscadas, alimentado por `datas_ocupadas()` — o morador deixa de descobrir o conflito só depois de enviar. `components/Calendario.tsx`, escrito à mão porque o DateTimePicker nativo não desabilita dia solto
 
 ### Regras do condomínio
 - [x] Regras editáveis pelo síndico, com aviso automático disparado quando forem alteradas — o aviso não é uma etapa da tela, é parte da transação do RPC `salvar_regras`; a tabela nem tem policy de escrita. O síndico pode escrever um resumo do que mudou, que vira o texto do aviso; sem resumo sai um texto padrão
@@ -253,7 +442,8 @@ O nó técnico: o primeiro síndico é um paradoxo igual ao do `vincular_por_cod
 - [ ] Sem unique em `(condominio_id, bloco, numero)`: a checagem de duplicata é só no client. Dois síndicos do mesmo prédio criando unidades ao mesmo tempo duplicam
 
 ### Vagas de garagem
-- [ ] Solicitação de troca de vaga entre condôminos (pedir, aceitar/recusar, histórico de trocas)
+- [ ] Solicitação de troca de vaga entre condôminos (pedir, aceitar/recusar, histórico de trocas) — já anunciado como *em breve* na folha do + em Solicitações
+- [ ] Alteração de dados cadastrais — mesmo caso, também já anunciado como *em breve*
 
 ### Papéis
 - [x] Função de subsíndico — decisão de 20/08/2026: herda os **quatro** blocos (moderação, solicitações, comunicação oficial e governança). Na prática é síndico com um freio só: não atribui cargo. Foi escolha consciente do Vitor depois de eu apontar que isso apaga boa parte da diferença entre os dois
@@ -264,7 +454,34 @@ O nó técnico: o primeiro síndico é um paradoxo igual ao do `vincular_por_cod
 - [ ] Push notifications (avisos, votação aberta, reunião marcada, resposta no feed etc. chegando como notificação, não só ao abrir o app)
 
 ### UX geral
-- [ ] Revisão de layout — depois que o funcional estiver mais maduro, passar um olho na experiência visual como um todo
+- [x] Revisão de layout — feita em 21/08/2026, antecipada de propósito porque o argumento da apresentação é a navegação. Tokens em `lib/tema.ts`, peças em `components/ui.tsx`, `Button` do RN eliminado, safe-area no lugar de `paddingTop` chumbado, ícones na barra de abas, estados vazios com ícone e frase de ação
+- [ ] Segunda passada de layout **depois** do feedback do síndico — a primeira foi feita às cegas, sem ninguém de fora ter usado
+
+### Navegação e Mural
+- [x] Ordem das abas Oficial · Mural · Solicitações · Gestão, com Perfil fora da barra
+- [x] Cabeçalho com avatar, nome, unidade, cargo e menu de três pontinhos
+- [ ] Itens do menu de três pontinhos: Conta, Privacidade, Preferências, Notificações — hoje são rótulos "em breve"
+- [x] Mural em formato de rede social: + flutuante, pop-up de publicação, "Ler mais", joinha, botões grandes, post ancorado com comentários rolando
+- [x] Cargo do autor embaixo do nome no Mural (RPC `papeis_do_meu_condominio`)
+- [ ] **Foto de perfil de verdade.** `usuarios.foto_url` existe no schema desde o começo e nenhuma tela jamais gravou nela; o `Avatar` já lê a coluna, mas na prática todo mundo cai nas iniciais. Falta upload (Supabase Storage) e a tela pra escolher
+- [x] Setinha de fechar com arrasto no post expandido, duplo toque pra curtir, botão + alinhado à barra de abas
+- [x] Oficial em sub-abas (Avisos · Reuniões · Votações · Regras), um fixado por vez, restrito não fixa e com borda roxa, Regras como documento
+- [x] Abrir item em folha de meia tela com alcinha e fundo escurecido, compartilhada entre Mural e Oficial
+- [x] Confirmar presença: barra no rodapé da folha, estado de salvando, balão de confirmação que some sozinho
+- [x] Trocar o voto numa votação aberta, com as opções no formato de enquete do WhatsApp (marcador, contagem e barra de proporção)
+- [x] Apuração visível só pra síndico, subsíndico e conselho fiscal — fechado no RLS, não só na tela
+- [ ] Divulgar o resultado quando a votação encerrar. Hoje o morador vota e nunca fica sabendo do desfecho pelo app; a tela diz que o síndico divulga, mas não há caminho pra isso além de publicar um aviso na mão
+- [ ] Retirar o voto (voltar a "não votei") — deixado de fora de propósito: mexe no denominador do quórum
+- [ ] Arrastar-para-fechar por cima de lista rolável — depende de `react-native-gesture-handler`; as outras três saídas cobrem enquanto isso
+- [x] Solicitações reorganizada: Sugestões fora do app, Problemas virou Manutenção, sub-abas no formato do Oficial e criação pelo +
+- [ ] Apagar `sugestoes` e `apoios` do banco, depois de conferir a migração no celular
+- [ ] Mudanças na aba Gestão — ainda não detalhadas
+
+### Apresentação
+- [x] Modo demonstração — atalhos de papel na tela de login e seletor no Perfil, atrás do flag `EXPO_PUBLIC_DEMO`
+- [x] Seed de demonstração — `db/seed-demo.sql`, re-executável
+- [ ] Ensaiar a apresentação ponta a ponta no celular (roteiro em *Onde retomar*)
+- [ ] `db/metricas.sql` — consultas prontas pro painel do Supabase, pra ter número na conversa de feedback. Não precisa de instrumentação: quase tudo que importa já está nas tabelas. O que **não** dá pra responder sem instrumentar é "com que frequência abrem o app"
 
 ## Sugestões baseadas em apps concorrentes (Condomob, uCondo, CondomínioApp, Superlógica, Lello)
 
@@ -295,7 +512,7 @@ Não são recomendação de implementar tudo — são ideias pra avaliar quando 
 - [x] Indicador de tempo em aberto nos Problemas — conta da **última mudança de status**, não da abertura: é o "aberto há 5 dias sem atualização" que a pesquisa apontou. Âmbar a partir de 3 dias, vermelho a partir de 7; resolvido mostra em quanto tempo foi
 - [ ] Lembrete automático antes do prazo de uma votação encerrar
 - [ ] Anexar documento/pauta a uma votação
-- [ ] Relato confidencial (só síndico vê) como opção alternativa ao relato público em Problemas
+- [x] Relato confidencial (só síndico vê) como opção alternativa ao relato público em Problemas — virou o interruptor "área comum / minha unidade" em Manutenção. O rótulo "confidencial" foi descartado: "minha unidade" diz melhor o que é, e não sugere denúncia
 
 ## Como priorizar
 
@@ -405,7 +622,7 @@ MVP completo e em uso num condomínio real. Um condomínio novo entra sozinho, s
 | ~~Moderação de comentário (síndico)~~ FEITO | Saiu junto dos comentários: link "remover" em cada comentário, visível só pro síndico. |
 | ~~Retirar apoio de sugestão~~ FEITO | O código já fazia o delete; faltava a policy, que veio no patch de 20/08. Só precisou de endurecimento contra falha silenciosa. |
 | ~~"Aberto há X dias" nos Problemas~~ FEITO | Conta da última mudança de status, não da abertura. Âmbar em 3 dias, vermelho em 7. |
-| Revisão de layout | **Adiado por decisão de 20/08/2026 para o fim do roadmap** — fazer a passada visual depois que as telas pararem de mudar, senão retrabalho. |
+| ~~Revisão de layout~~ FEITO | Adiada em 20/08 pro fim do roadmap e **antecipada em 21/08**, quando o objetivo virou apresentar o app a um síndico defendendo que a navegação é intuitiva. Adiar contradiria o próprio pitch. |
 
 ## Fase 2 — Dia a dia do síndico
 
@@ -423,14 +640,15 @@ MVP completo e em uso num condomínio real. Um condomínio novo entra sozinho, s
 - ~~Reserva de salão~~ **FEITO**
 - ~~Regras do condomínio editáveis, com aviso automático quando mudarem~~ **FEITO**
 - ~~Subsíndico e conselho fiscal (permissões intermediárias)~~ **FEITO** — junto com o canal restrito do Oficial
-- Troca de vaga de garagem entre condôminos
-- Relato confidencial em Problemas (visível só ao síndico), separado do relato público
+- ~~Relato confidencial em Problemas (visível só ao síndico), separado do relato público~~ **FEITO** em 22/08/2026, como "área comum vs. minha unidade" em Manutenção
+- Troca de vaga de garagem entre condôminos — **último item aberto da Fase 3**
 
 ## Fase 4 — Só quando for pra fora
 
 **Meta:** nada aqui vale antes de existir um segundo condomínio real. São itens de escala e de venda, não de produto.
 
-- **Push notifications** — adiado por decisão de 20/08/2026. Continua sendo o maior item de retenção do backlog, mas exige *development build* (não roda no Expo Go desde o SDK 53), o que quebra o fluxo de teste atual. Bom saber: é o **mesmo** trabalho de infra que gera o `.apk` sideloaded pra distribuição — quando for encarar, resolve os dois de uma vez.
+- **Push notifications** — adiado por decisão de 20/08/2026. Continua sendo o maior item de retenção do backlog, e a resposta honesta à pergunta "por que abrir isso em vez do WhatsApp" enquanto ele não existir é: *não abriria* — o WhatsApp avisa, o Varanda espera você lembrar dele. Exige *development build* (não roda no Expo Go desde o SDK 53), o que quebra o fluxo de teste atual.
+- **`.apk` / EAS Build** — separado do push, ao contrário do que este roadmap dizia antes. Gerar um `.apk` **não** quebra o Expo Go: dá pra continuar desenvolvendo no Expo Go e buildar um `.apk` quando precisar entregar. O que quebraria o Expo Go é adicionar `expo-notifications`. São duas decisões, não uma. Pré-requisitos do `.apk`: `app.json` de verdade (hoje o app se chama "varanda-app", sem `android.package`) e um `eas.json` com perfil de APK.
 - **Analytics de engajamento** — gate do trial condicional descrito na Parte 3. Sem ele não dá pra decidir quem estende de 3 pra 6 meses. Enquanto houver um condomínio só, dá pra olhar no painel do Supabase na mão.
 - Prestação de contas simplificada — a reclamação nº1 com número concreto (21%, AABIC)
 - Documentos do condomínio (atas, convenção, regimento)
