@@ -1,6 +1,9 @@
 import { useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useMeuCondominio } from '../lib/useMeuCondominio';
+import { cores, espaco, raio } from '../lib/tema';
+import { Seletor } from '../components/ui';
+import CabecalhoApp from '../components/CabecalhoApp';
 import VinculosPendentesScreen from './VinculosPendentesScreen';
 import UnidadesScreen from './UnidadesScreen';
 import CondominosScreen from './CondominosScreen';
@@ -12,8 +15,7 @@ const ABAS = [
   { chave: 'vinculos', label: 'Vínculos' },
   { chave: 'condominos', label: 'Condôminos' },
   { chave: 'unidades', label: 'Unidades' },
-  { chave: 'sugestoes', label: 'Sugestões' },
-  { chave: 'problemas', label: 'Problemas' },
+  { chave: 'manutencao', label: 'Manutenção' },
   { chave: 'oficial', label: 'Oficial' },
   { chave: 'regras', label: 'Regras' },
 ] as const;
@@ -24,67 +26,58 @@ type Aba = (typeof ABAS)[number]['chave'];
 // andamento das solicitações, sem nenhum botão que escreva. As abas que
 // faltam não são escondidas por educação — o RLS recusaria a escrita de
 // qualquer jeito, e update recusado por RLS falha calado (armadilha nº4).
-const ABAS_CONSELHO: Aba[] = ['condominos', 'sugestoes', 'problemas'];
+const ABAS_CONSELHO: Aba[] = ['condominos', 'manutencao'];
 
 export default function GestaoScreen() {
-  const { podeGerir } = useMeuCondominio();
+  const { podeGerir, ehSindico, cargo } = useMeuCondominio();
   const abas = podeGerir ? ABAS : ABAS.filter((a) => ABAS_CONSELHO.includes(a.chave));
   const [aba, setAba] = useState<Aba>(podeGerir ? 'vinculos' : 'condominos');
   const somenteLeitura = !podeGerir;
 
-  return (
-    <View style={{ flex: 1, backgroundColor: '#F2EFE6' }}>
-      {somenteLeitura && (
-        <Text style={styles.avisoLeitura}>
-          Conselho fiscal · somente leitura
-        </Text>
-      )}
-      <View style={[styles.seletor, somenteLeitura && styles.seletorComAviso]}>
-        {abas.map((a) => (
-          <Pressable
-            key={a.chave}
-            style={[styles.opcao, aba === a.chave && styles.opcaoAtiva]}
-            onPress={() => setAba(a.chave)}
-          >
-            <Text style={[styles.texto, aba === a.chave && styles.textoAtivo]}>{a.label}</Text>
-          </Pressable>
-        ))}
-      </View>
+  const quem = ehSindico ? 'Síndico' : cargo === 'subsindico' ? 'Subsíndico' : 'Conselho fiscal';
 
-      {aba === 'vinculos' && <VinculosPendentesScreen />}
-      {aba === 'condominos' && <CondominosScreen />}
-      {aba === 'unidades' && <UnidadesScreen />}
-      {aba === 'sugestoes' && <ModerarScreen tipo="sugestoes" somenteLeitura={somenteLeitura} />}
-      {aba === 'problemas' && <ModerarScreen tipo="problemas" somenteLeitura={somenteLeitura} />}
-      {aba === 'oficial' && <OficialCriarScreen />}
-      {aba === 'regras' && <RegrasEditarScreen />}
+  return (
+    <View style={{ flex: 1, backgroundColor: cores.fundo }}>
+      <CabecalhoApp />
+      <Text style={styles.legenda}>Gestão · {quem}</Text>
+
+      {somenteLeitura && (
+        <View style={styles.faixa}>
+          <Text style={styles.faixaTexto}>
+            👓 Somente leitura — o conselho acompanha, mas não altera nada
+          </Text>
+        </View>
+      )}
+
+      <Seletor opcoes={abas} valor={aba} aoTrocar={setAba} />
+
+      <View style={{ flex: 1, marginTop: espaco.md }}>
+        {aba === 'vinculos' && <VinculosPendentesScreen />}
+        {aba === 'condominos' && <CondominosScreen />}
+        {aba === 'unidades' && <UnidadesScreen />}
+        {aba === 'manutencao' && <ModerarScreen somenteLeitura={somenteLeitura} />}
+        {aba === 'oficial' && <OficialCriarScreen />}
+        {aba === 'regras' && <RegrasEditarScreen />}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  avisoLeitura: {
-    marginTop: 56,
-    marginHorizontal: 16,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    color: '#C98A1F',
+  legenda: {
+    fontSize: 12,
+    color: cores.textoFraco,
+    paddingHorizontal: espaco.lg,
+    paddingTop: espaco.md,
+    paddingBottom: espaco.sm,
   },
-  seletor: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 60,
-    marginHorizontal: 16,
-    backgroundColor: '#E4DFD2',
-    borderRadius: 12,
-    padding: 3,
-    gap: 3,
+  faixa: {
+    marginHorizontal: espaco.lg,
+    marginBottom: espaco.md,
+    backgroundColor: cores.atencaoFundo,
+    borderRadius: raio.sm,
+    paddingVertical: espaco.sm,
+    paddingHorizontal: espaco.md,
   },
-  seletorComAviso: { marginTop: 10 },
-  opcao: { flexGrow: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center', minWidth: '45%' },
-  opcaoAtiva: { backgroundColor: '#fff' },
-  texto: { fontSize: 13, color: '#6B665D', fontWeight: '600' },
-  textoAtivo: { color: '#1B4B66' },
+  faixaTexto: { fontSize: 12, color: cores.atencao, fontWeight: '600' },
 });

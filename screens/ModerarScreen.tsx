@@ -1,41 +1,58 @@
+// Fila de manutenção do síndico: mudar status e arquivar.
+//
+// Era genérica sobre `tipo: 'sugestoes' | 'problemas'`. Sugestões saiu do app
+// em 21/08/2026 (virou post no Mural), então sobrou um tipo só — e com ele a
+// generalização, que agora só atrapalhava a leitura.
+
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Pressable, Alert, RefreshControl } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Alert, RefreshControl } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { cores, espaco } from '../lib/tema';
+import { Cartao, Chip, Etiqueta, Link, Seletor, Tom, Vazio } from '../components/ui';
+import { useAvisoRapido } from '../components/AvisoRapido';
 
-const SUGESTAO_STATUS = ['analise', 'aprovada', 'implementada'];
-const SUGESTAO_LABEL: Record<string, string> = {
-  analise: 'Em análise',
-  aprovada: 'Aprovada',
-  implementada: 'Implementada',
-};
+const STATUS = ['aberto', 'em_andamento', 'resolvido'];
 
-const PROBLEMA_STATUS = ['aberto', 'em_andamento', 'resolvido'];
-const PROBLEMA_LABEL: Record<string, string> = {
+const LABEL: Record<string, string> = {
   aberto: 'Aberto',
   em_andamento: 'Em andamento',
   resolvido: 'Resolvido',
 };
 
-export default function ModerarScreen({
-  tipo,
-  somenteLeitura = false,
-}: {
-  tipo: 'sugestoes' | 'problemas';
-  somenteLeitura?: boolean;
-}) {
-  const [lista, setLista] = useState<any[]>([]);
-  const [verArquivados, setVerArquivados] = useState(false);
+const TOM: Record<string, Tom> = {
+  aberto: 'critico',
+  em_andamento: 'atencao',
+  resolvido: 'ok',
+};
+
+const FILTROS = [
+  { chave: 'ativas', label: 'Ativas' },
+  { chave: 'arquivadas', label: 'Arquivadas' },
+] as const;
+
+type Filtro = (typeof FILTROS)[number]['chave'];
+
+type Pedido = {
+  id: string;
+  titulo: string;
+  categoria: string | null;
+  local: string | null;
+  status: string;
+  area_comum: boolean;
+  arquivado_em: string | null;
+};
+
+export default function ModerarScreen({ somenteLeitura = false }: { somenteLeitura?: boolean }) {
+  const { mostrar } = useAvisoRapido();
+  const [lista, setLista] = useState<Pedido[]>([]);
+  const [filtro, setFiltro] = useState<Filtro>('ativas');
   const [refreshing, setRefreshing] = useState(false);
-  const opcoes = tipo === 'sugestoes' ? SUGESTAO_STATUS : PROBLEMA_STATUS;
-  const labels = tipo === 'sugestoes' ? SUGESTAO_LABEL : PROBLEMA_LABEL;
+  const verArquivados = filtro === 'arquivadas';
 
   const carregar = useCallback(async () => {
-    const colunas =
-      tipo === 'sugestoes'
-        ? 'id, titulo, descricao, status, arquivado_em'
-        : 'id, titulo, categoria, local, status, arquivado_em';
-
-    let query = supabase.from(tipo).select(colunas);
+    let query = supabase
+      .from('problemas')
+      .select('id, titulo, categoria, local, status, area_comum, arquivado_em');
     query = verArquivados
       ? query.not('arquivado_em', 'is', null)
       : query.is('arquivado_em', null);
@@ -46,38 +63,41 @@ export default function ModerarScreen({
       Alert.alert('Erro ao carregar', error.message);
       return;
     }
-    setLista(data ?? []);
-  }, [tipo, verArquivados]);
+    setLista((data as unknown as Pedido[]) ?? []);
+  }, [verArquivados]);
 
   useEffect(() => {
     carregar();
   }, [carregar]);
 
   async function mudarStatus(id: string, novoStatus: string) {
-    const { error } = await supabase.from(tipo).update({ status: novoStatus }).eq('id', id);
+    const { error } = await supabase.from('problemas').update({ status: novoStatus }).eq('id', id);
     if (error) {
       Alert.alert('Erro ao atualizar status', error.message);
       return;
     }
 
-    if (tipo === 'problemas') {
-      const { data: userData } = await supabase.auth.getUser();
-      const { error: erroHistorico } = await supabase.from('historico_status').insert({
-        problema_id: id,
-        status: novoStatus,
-        autor_id: userData.user?.id,
-      });
-      // O histórico alimenta o "aberto há X dias" na tela do morador; se ele
-      // falha calado, o contador congela e ninguém entende por quê.
-      if (erroHistorico) Alert.alert('Status mudou, mas o histórico falhou', erroHistorico.message);
+    const { data: userData } = await supabase.auth.getUser();
+    const { error: erroHistorico } = await supabase.from('historico_status').insert({
+      problema_id: id,
+      status: novoStatus,
+      autor_id: userData.user?.id,
+    });
+    // O histórico alimenta o "aberto há X dias" na tela do morador; se ele
+    // falha calado, o contador congela e ninguém entende por quê.
+    if (erroHistorico) {
+      Alert.alert('Status mudou, mas o histórico falhou', erroHistorico.message);
+      carregar();
+      return;
     }
 
+    mostrar(`Marcado como ${LABEL[novoStatus].toLowerCase()}`);
     carregar();
   }
 
   async function alternarArquivo(id: string, arquivado: boolean) {
     const { data, error } = await supabase
-      .from(tipo)
+      .from('problemas')
       .update({ arquivado_em: arquivado ? null : new Date().toISOString() })
       .eq('id', id)
       .select();
@@ -88,9 +108,13 @@ export default function ModerarScreen({
     }
     // Update bloqueado por RLS não devolve erro, devolve zero linhas.
     if (!data || data.length === 0) {
-      Alert.alert('Não consegui', 'O banco recusou a alteração. Confira se você é síndico deste condomínio.');
+      Alert.alert(
+        'Não consegui',
+        'O banco recusou a alteração. Confira se você é síndico deste condomínio.'
+      );
       return;
     }
+    mostrar(arquivado ? 'Desarquivado' : 'Arquivado');
     carregar();
   }
 
@@ -102,76 +126,74 @@ export default function ModerarScreen({
 
   return (
     <View style={styles.container}>
-      <View style={styles.filtro}>
-        {[false, true].map((arquivado) => (
-          <Pressable
-            key={String(arquivado)}
-            onPress={() => setVerArquivados(arquivado)}
-            style={[styles.filtroOpcao, verArquivados === arquivado && styles.filtroOpcaoAtiva]}
-          >
-            <Text
-              style={[styles.filtroTexto, verArquivados === arquivado && styles.filtroTextoAtivo]}
-            >
-              {arquivado ? 'Arquivadas' : 'Ativas'}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      <Seletor opcoes={FILTROS} valor={filtro} aoTrocar={setFiltro} />
 
       <FlatList
+        style={{ marginTop: espaco.md }}
         data={lista}
         keyExtractor={(item) => item.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: espaco.xxl, paddingHorizontal: espaco.lg }}
         ListEmptyComponent={
-          <Text style={styles.vazio}>
-            {verArquivados ? 'Nada arquivado ainda.' : 'Nada por aqui ainda.'}
-          </Text>
+          <Vazio
+            icone={verArquivados ? '🗄️' : '🔧'}
+            titulo={verArquivados ? 'Nada arquivado ainda' : 'Nenhum pedido ativo no momento'}
+            texto={
+              verArquivados
+                ? 'O que é arquivado sai da vista dos moradores, mas nunca é apagado.'
+                : undefined
+            }
+          />
         }
         renderItem={({ item }) => {
           const arquivado = !!item.arquivado_em;
           return (
-            <View style={styles.card}>
+            <Cartao>
               <Text style={styles.titulo}>{item.titulo}</Text>
-              {tipo === 'problemas' && (
-                <Text style={styles.meta}>
-                  {item.categoria} · {item.local}
-                </Text>
+              <Text style={styles.meta}>
+                {[item.categoria, item.local].filter(Boolean).join(' · ')}
+              </Text>
+
+              {/* Sem isto o síndico responderia no Mural achando que o
+                  prédio já sabe. Ninguém sabe: só ele e o autor veem. */}
+              {!item.area_comum && (
+                <View style={styles.privado}>
+                  <Etiqueta texto="Só na unidade" tom="info" />
+                </View>
               )}
-              {tipo === 'sugestoes' && <Text style={styles.descricao}>{item.descricao}</Text>}
 
               {/* Sem permissão de escrita o status vira etiqueta, não botão:
                   o RLS recusaria o update e a recusa não gera erro visível. */}
               {somenteLeitura ? (
-                <View style={styles.opcoes}>
-                  <View style={[styles.opcao, styles.opcaoAtiva]}>
-                    <Text style={[styles.opcaoTexto, styles.opcaoTextoAtiva]}>
-                      {labels[item.status]}
-                    </Text>
-                  </View>
+                <View style={{ marginTop: espaco.md }}>
+                  <Etiqueta
+                    texto={LABEL[item.status] ?? item.status}
+                    tom={TOM[item.status] ?? 'neutro'}
+                  />
                 </View>
               ) : (
-                <View style={styles.opcoes}>
-                  {opcoes.map((s) => (
-                    <Pressable
-                      key={s}
-                      onPress={() => mudarStatus(item.id, s)}
-                      style={[styles.opcao, item.status === s && styles.opcaoAtiva]}
-                    >
-                      <Text style={[styles.opcaoTexto, item.status === s && styles.opcaoTextoAtiva]}>
-                        {labels[s]}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
+                <>
+                  <Text style={styles.rotulo}>Mudar status para</Text>
+                  <View style={styles.opcoes}>
+                    {STATUS.map((s) => (
+                      <Chip
+                        key={s}
+                        titulo={LABEL[s]}
+                        ativo={item.status === s}
+                        onPress={() => mudarStatus(item.id, s)}
+                      />
+                    ))}
+                  </View>
+                  <View style={{ marginTop: espaco.md, alignSelf: 'flex-start' }}>
+                    <Link
+                      titulo={arquivado ? 'Desarquivar' : 'Arquivar'}
+                      tom={arquivado ? 'primaria' : 'perigo'}
+                      onPress={() => alternarArquivo(item.id, arquivado)}
+                    />
+                  </View>
+                </>
               )}
-
-              {!somenteLeitura && (
-                <Pressable onPress={() => alternarArquivo(item.id, arquivado)} hitSlop={6}>
-                  <Text style={styles.arquivar}>{arquivado ? 'Desarquivar' : 'Arquivar'}</Text>
-                </Pressable>
-              )}
-            </View>
+            </Cartao>
           );
         }}
       />
@@ -180,41 +202,18 @@ export default function ModerarScreen({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2EFE6', paddingHorizontal: 16, paddingTop: 12 },
-  filtro: {
-    flexDirection: 'row',
-    backgroundColor: '#E4DFD2',
-    borderRadius: 12,
-    padding: 3,
-    gap: 3,
-    marginBottom: 12,
+  container: { flex: 1, backgroundColor: cores.fundo },
+  titulo: { fontWeight: '700', fontSize: 15, color: cores.texto },
+  meta: { fontSize: 12, color: cores.textoFraco, marginTop: 2 },
+  privado: { marginTop: espaco.sm, alignSelf: 'flex-start' },
+  rotulo: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    color: cores.textoFraco,
+    marginTop: espaco.md,
+    marginBottom: espaco.sm,
   },
-  filtroOpcao: { flex: 1, paddingVertical: 7, borderRadius: 10, alignItems: 'center' },
-  filtroOpcaoAtiva: { backgroundColor: '#fff' },
-  filtroTexto: { fontSize: 12, color: '#6B665D', fontWeight: '600' },
-  filtroTextoAtivo: { color: '#1B4B66' },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#E4DFD2',
-  },
-  titulo: { fontWeight: '700', fontSize: 15, color: '#211F1B' },
-  meta: { fontSize: 12, color: '#6B665D', marginTop: 2 },
-  descricao: { fontSize: 13, color: '#6B665D', marginTop: 4 },
-  opcoes: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
-  opcao: {
-    borderWidth: 1,
-    borderColor: '#E4DFD2',
-    borderRadius: 20,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  opcaoAtiva: { backgroundColor: '#1B4B66', borderColor: '#1B4B66' },
-  opcaoTexto: { fontSize: 12, color: '#6B665D' },
-  opcaoTextoAtiva: { color: '#fff', fontWeight: '600' },
-  arquivar: { fontSize: 12, color: '#B6512E', marginTop: 12 },
-  vazio: { textAlign: 'center', color: '#6B665D', marginTop: 30 },
+  opcoes: { flexDirection: 'row', flexWrap: 'wrap', gap: espaco.sm },
 });
