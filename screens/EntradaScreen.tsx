@@ -1,16 +1,9 @@
 import { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  Button,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Alert,
-} from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Alert } from 'react-native';
 import { supabase } from '../lib/supabase';
 import type { Situacao } from '../lib/useMeuCondominio';
+import { cores, espaco } from '../lib/tema';
+import { Botao, Campo, Cartao, EspacoTopo, Seletor } from '../components/ui';
 
 /**
  * Onboarding: leva o usuário recém-cadastrado até ter um vínculo aprovado.
@@ -26,17 +19,32 @@ export default function EntradaScreen({
   situacao: Situacao;
   aoConcluir: () => void;
 }) {
+  const PASSOS: Record<Situacao, number> = {
+    sem_perfil: 1,
+    sem_vinculo: 2,
+    pendente: 3,
+    aprovado: 3,
+  };
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 60 }}>
-      <Text style={styles.titulo}>varanda</Text>
+    <ScrollView style={styles.container} contentContainerStyle={styles.conteudo}>
+      <EspacoTopo extra={espaco.xl} />
 
-      {situacao === 'sem_perfil' && <Perfil aoConcluir={aoConcluir} />}
-      {situacao === 'sem_vinculo' && <EscolhaDeEntrada aoConcluir={aoConcluir} />}
-      {situacao === 'pendente' && <Pendente aoConcluir={aoConcluir} />}
+      <Text style={styles.marca}>varanda</Text>
+      <Text style={styles.passo}>Passo {PASSOS[situacao]} de 3</Text>
 
-      <Pressable style={styles.sair} onPress={() => supabase.auth.signOut()}>
-        <Text style={styles.sairTexto}>Sair da conta</Text>
-      </Pressable>
+      <View style={{ marginTop: espaco.xl }}>
+        {situacao === 'sem_perfil' && <Perfil aoConcluir={aoConcluir} />}
+        {situacao === 'sem_vinculo' && <EscolhaDeEntrada aoConcluir={aoConcluir} />}
+        {situacao === 'pendente' && <Pendente aoConcluir={aoConcluir} />}
+      </View>
+
+      <Botao
+        titulo="Sair da conta"
+        variante="fantasma"
+        onPress={() => supabase.auth.signOut()}
+        estilo={{ marginTop: espaco.xl }}
+      />
     </ScrollView>
   );
 }
@@ -72,39 +80,39 @@ function Perfil({ aoConcluir }: { aoConcluir: () => void }) {
   }
 
   return (
-    <View style={styles.bloco}>
+    <Cartao>
       <Text style={styles.subtitulo}>Como você se chama?</Text>
       <Text style={styles.ajuda}>É o nome que aparece nas suas mensagens no mural.</Text>
-      <TextInput style={styles.input} value={nome} onChangeText={setNome} placeholder="Nome e sobrenome" />
-      <Button title="Continuar" onPress={salvar} disabled={busy} />
-    </View>
+      <Campo
+        value={nome}
+        onChangeText={setNome}
+        placeholder="Nome e sobrenome"
+        estilo={{ marginTop: espaco.md }}
+      />
+      <Botao
+        titulo="Continuar"
+        onPress={salvar}
+        disabled={busy}
+        carregando={busy}
+        estilo={{ marginTop: espaco.lg }}
+      />
+    </Cartao>
   );
 }
 
+const MODOS = [
+  { chave: 'morador', label: 'Sou morador' },
+  { chave: 'fundar', label: 'Vou fundar' },
+] as const;
+
+type Modo = (typeof MODOS)[number]['chave'];
+
 function EscolhaDeEntrada({ aoConcluir }: { aoConcluir: () => void }) {
-  const [modo, setModo] = useState<'morador' | 'fundar'>('morador');
+  const [modo, setModo] = useState<Modo>('morador');
 
   return (
-    <View>
-      <View style={styles.seletor}>
-        <Pressable
-          style={[styles.opcao, modo === 'morador' && styles.opcaoAtiva]}
-          onPress={() => setModo('morador')}
-        >
-          <Text style={[styles.opcaoTexto, modo === 'morador' && styles.opcaoTextoAtivo]}>
-            Sou morador
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[styles.opcao, modo === 'fundar' && styles.opcaoAtiva]}
-          onPress={() => setModo('fundar')}
-        >
-          <Text style={[styles.opcaoTexto, modo === 'fundar' && styles.opcaoTextoAtivo]}>
-            Vou fundar
-          </Text>
-        </Pressable>
-      </View>
-
+    <View style={{ gap: espaco.md }}>
+      <Seletor opcoes={MODOS} valor={modo} aoTrocar={setModo} />
       {modo === 'morador' ? <Convite aoConcluir={aoConcluir} /> : <Fundar aoConcluir={aoConcluir} />}
     </View>
   );
@@ -135,20 +143,27 @@ function Convite({ aoConcluir }: { aoConcluir: () => void }) {
   }
 
   return (
-    <View style={styles.bloco}>
+    <Cartao>
       <Text style={styles.subtitulo}>Código de convite</Text>
       <Text style={styles.ajuda}>
         O síndico envia um código por unidade. Depois de usar, ele ainda precisa aprovar seu pedido.
       </Text>
-      <TextInput
-        style={styles.input}
+      <Campo
         value={codigo}
         onChangeText={setCodigo}
         autoCapitalize="none"
+        autoCorrect={false}
         placeholder="ex: a1b2c3d4"
+        estilo={{ marginTop: espaco.md }}
       />
-      <Button title="Entrar no condomínio" onPress={vincular} disabled={busy} />
-    </View>
+      <Botao
+        titulo="Entrar no condomínio"
+        onPress={vincular}
+        disabled={busy || !codigo.trim()}
+        carregando={busy}
+        estilo={{ marginTop: espaco.lg }}
+      />
+    </Cartao>
   );
 }
 
@@ -188,100 +203,88 @@ function Fundar({ aoConcluir }: { aoConcluir: () => void }) {
   }
 
   return (
-    <View style={styles.bloco}>
+    <Cartao>
       <Text style={styles.subtitulo}>Fundar um condomínio</Text>
       <Text style={styles.ajuda}>
         Precisa de um código de fundação. Quem usa o código vira o síndico do condomínio criado.
       </Text>
 
-      <Text style={styles.label}>Código de fundação</Text>
-      <TextInput
-        style={styles.input}
+      <Campo
+        rotulo="Código de fundação"
         value={codigo}
         onChangeText={setCodigo}
         autoCapitalize="characters"
+        autoCorrect={false}
         placeholder="ex: VARANDA-2026-ABC"
+        estilo={{ marginTop: espaco.md }}
       />
-
-      <Text style={styles.label}>Nome do condomínio</Text>
-      <TextInput
-        style={styles.input}
+      <Campo
+        rotulo="Nome do condomínio"
         value={nomeCondominio}
         onChangeText={setNomeCondominio}
         placeholder="ex: Edifício Varanda"
+        estilo={{ marginTop: espaco.md }}
+      />
+      <Campo
+        rotulo="Endereço (opcional)"
+        value={endereco}
+        onChangeText={setEndereco}
+        placeholder="Rua, número"
+        estilo={{ marginTop: espaco.md }}
       />
 
-      <Text style={styles.label}>Endereço (opcional)</Text>
-      <TextInput style={styles.input} value={endereco} onChangeText={setEndereco} placeholder="Rua, número" />
-
-      <Text style={styles.label}>Sua unidade</Text>
+      <Text style={styles.rotulo}>Sua unidade</Text>
       <View style={styles.linha}>
-        <TextInput
-          style={[styles.input, { flex: 1 }]}
+        <Campo
           value={bloco}
           onChangeText={setBloco}
           placeholder="Bloco (opcional)"
+          estilo={{ flex: 1 }}
         />
-        <TextInput
-          style={[styles.input, { flex: 1 }]}
-          value={numero}
-          onChangeText={setNumero}
-          placeholder="Número"
-        />
+        <Campo value={numero} onChangeText={setNumero} placeholder="Número" estilo={{ flex: 1 }} />
       </View>
 
-      <Button title="Criar condomínio" onPress={fundar} disabled={busy} />
-    </View>
+      <Botao
+        titulo="Criar condomínio"
+        onPress={fundar}
+        disabled={busy}
+        carregando={busy}
+        estilo={{ marginTop: espaco.lg }}
+      />
+    </Cartao>
   );
 }
 
 function Pendente({ aoConcluir }: { aoConcluir: () => void }) {
   return (
-    <View style={styles.bloco}>
-      <Text style={styles.subtitulo}>Aguardando aprovação</Text>
+    <Cartao>
+      <Text style={styles.subtitulo}>⏳ Aguardando aprovação</Text>
       <Text style={styles.ajuda}>
         Seu pedido de vínculo chegou pro síndico. Enquanto ele não aprovar, o app fica bloqueado.
       </Text>
-      <Button title="Já fui aprovado, verificar" onPress={aoConcluir} />
-    </View>
+      <Botao
+        titulo="Já fui aprovado, verificar"
+        variante="secundario"
+        onPress={aoConcluir}
+        estilo={{ marginTop: espaco.lg }}
+      />
+    </Cartao>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2EFE6', padding: 20, paddingTop: 70 },
-  titulo: { fontSize: 24, fontWeight: '800', color: '#1B4B66', marginBottom: 20 },
-  bloco: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E4DFD2',
-    padding: 16,
-    gap: 8,
+  container: { flex: 1, backgroundColor: cores.fundo },
+  conteudo: { paddingHorizontal: espaco.xl, paddingBottom: espaco.xxl },
+  marca: { fontSize: 28, fontWeight: '800', color: cores.primaria, letterSpacing: -0.5 },
+  passo: { fontSize: 12, color: cores.textoFraco, marginTop: espaco.xs },
+  subtitulo: { fontSize: 16, fontWeight: '700', color: cores.texto },
+  ajuda: { fontSize: 13, color: cores.textoFraco, marginTop: espaco.xs, lineHeight: 19 },
+  rotulo: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: cores.textoFraco,
+    marginTop: espaco.md,
+    marginBottom: espaco.xs,
   },
-  subtitulo: { fontSize: 16, fontWeight: '700', color: '#1B4B66' },
-  ajuda: { fontSize: 13, color: '#6B665D', marginBottom: 4 },
-  label: { fontSize: 12, color: '#6B665D', marginTop: 6 },
-  input: {
-    borderWidth: 1,
-    borderColor: '#E4DFD2',
-    borderRadius: 10,
-    padding: 10,
-    backgroundColor: '#fff',
-    marginBottom: 4,
-  },
-  linha: { flexDirection: 'row', gap: 8 },
-  seletor: {
-    flexDirection: 'row',
-    backgroundColor: '#E4DFD2',
-    borderRadius: 12,
-    padding: 3,
-    gap: 3,
-    marginBottom: 12,
-  },
-  opcao: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center' },
-  opcaoAtiva: { backgroundColor: '#fff' },
-  opcaoTexto: { fontSize: 13, color: '#6B665D', fontWeight: '600' },
-  opcaoTextoAtivo: { color: '#1B4B66' },
-  sair: { marginTop: 24, alignItems: 'center' },
-  sairTexto: { color: '#B6512E', fontSize: 13 },
+  linha: { flexDirection: 'row', gap: espaco.sm },
 });

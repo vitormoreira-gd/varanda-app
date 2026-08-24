@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, Alert, Pressable, RefreshControl } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useMeuCondominio, Cargo } from '../lib/useMeuCondominio';
+import { cores, espaco, raio } from '../lib/tema';
+import { Cartao, Etiqueta, Vazio } from '../components/ui';
 
 const PAPEL_LABEL: Record<string, string> = {
   proprietario: 'proprietário',
@@ -214,34 +216,48 @@ export default function CondominosScreen() {
     0
   );
 
+  const adesao = linhas.length > 0 ? Math.round((ocupadas / linhas.length) * 100) : 0;
+
   return (
     <FlatList
       style={styles.container}
       data={linhas}
       keyExtractor={(item) => item.id}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      contentContainerStyle={{ paddingBottom: 40 }}
+      contentContainerStyle={{ paddingBottom: espaco.xxl }}
       ListHeaderComponent={
-        <View style={styles.resumo}>
-          <Text style={styles.resumoNumero}>
-            {totalMoradores} morador{totalMoradores === 1 ? '' : 'es'}
-          </Text>
-          <Text style={styles.resumoTexto}>
-            {ocupadas} de {linhas.length} unidade{linhas.length === 1 ? '' : 's'} com alguém no app
-            {pendentes > 0 ? ` · ${pendentes} aguardando aprovação` : ''}
-          </Text>
-          {ehSindico && (
-            <Text style={styles.resumoDica}>Toque num morador para dar ou tirar um cargo.</Text>
+        <Cartao>
+          {/* Adesão é a métrica que o trial condicional vai precisar medir.
+              Aqui ela ainda é calculada na tela, não guardada em lugar nenhum. */}
+          <View style={styles.numeros}>
+            <Numero valor={`${adesao}%`} rotulo="de adesão" destaque />
+            <Numero valor={String(totalMoradores)} rotulo={totalMoradores === 1 ? 'morador' : 'moradores'} />
+            <Numero valor={`${ocupadas}/${linhas.length}`} rotulo="unidades" />
+          </View>
+
+          {pendentes > 0 && (
+            <View style={styles.pendentes}>
+              <Etiqueta
+                texto={`${pendentes} aguardando aprovação`}
+                tom="atencao"
+              />
+            </View>
           )}
-        </View>
+
+          {ehSindico && (
+            <Text style={styles.dica}>Toque num morador para dar ou tirar um cargo.</Text>
+          )}
+        </Cartao>
       }
       ListEmptyComponent={
-        <Text style={styles.vazio}>
-          Nenhuma unidade cadastrada ainda. Cadastre as unidades na aba Unidades.
-        </Text>
+        <Vazio
+          icone="🏢"
+          titulo="Nenhuma unidade cadastrada"
+          texto="Cadastre os apartamentos na aba Unidades para começar a convidar moradores."
+        />
       }
       renderItem={({ item }) => (
-        <View style={styles.card}>
+        <Cartao>
           <Text style={styles.unidade}>
             {item.bloco ? `${item.bloco} · ` : ''}
             {item.numero}
@@ -255,56 +271,62 @@ export default function CondominosScreen() {
               return (
                 <Pressable
                   key={m.usuario_id}
-                  style={styles.morador}
+                  style={({ pressed }) => [styles.morador, pressed && ehSindico && styles.pressionado]}
                   onPress={() => abrirCargo(m)}
                   disabled={!ehSindico}
                 >
-                  <Text style={styles.nome}>{m.usuarios?.nome ?? 'Sem nome'}</Text>
+                  <Text style={styles.nome} numberOfLines={1}>
+                    {m.usuarios?.nome ?? 'Sem nome'}
+                  </Text>
                   <Text style={styles.papel}>{PAPEL_LABEL[m.papel] ?? m.papel}</Text>
-                  {cargo && <Text style={styles.cargo}>{CARGO_LABEL[cargo]}</Text>}
-                  {m.status === 'pendente' && <Text style={styles.pendente}>pendente</Text>}
+                  {cargo && <Etiqueta texto={CARGO_LABEL[cargo]} tom="info" />}
+                  {m.status === 'pendente' && <Etiqueta texto="pendente" tom="atencao" />}
                 </Pressable>
               );
             })
           )}
-        </View>
+        </Cartao>
       )}
     />
   );
 }
 
+function Numero({
+  valor,
+  rotulo,
+  destaque,
+}: {
+  valor: string;
+  rotulo: string;
+  destaque?: boolean;
+}) {
+  return (
+    <View style={styles.numero}>
+      <Text style={[styles.numeroValor, destaque && styles.numeroDestaque]}>{valor}</Text>
+      <Text style={styles.numeroRotulo}>{rotulo}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2EFE6', paddingHorizontal: 16, paddingTop: 12 },
-  resumo: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E4DFD2',
-    padding: 14,
-    marginBottom: 12,
+  container: { flex: 1, backgroundColor: cores.fundo, paddingHorizontal: espaco.lg },
+  numeros: { flexDirection: 'row', gap: espaco.lg },
+  numero: { flex: 1 },
+  numeroValor: { fontSize: 20, fontWeight: '800', color: cores.texto },
+  numeroDestaque: { color: cores.primaria, fontSize: 24 },
+  numeroRotulo: { fontSize: 11, color: cores.textoFraco, marginTop: 2 },
+  pendentes: { marginTop: espaco.md },
+  dica: { fontSize: 11, color: cores.primaria, marginTop: espaco.md },
+  unidade: { fontSize: 14, fontWeight: '800', color: cores.texto, marginBottom: espaco.sm },
+  ninguem: { fontSize: 12, color: cores.perigo },
+  morador: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espaco.sm,
+    paddingVertical: espaco.xs,
+    borderRadius: raio.sm,
   },
-  resumoNumero: { fontSize: 20, fontWeight: '800', color: '#1B4B66' },
-  resumoTexto: { fontSize: 12, color: '#6B665D', marginTop: 2 },
-  resumoDica: { fontSize: 11, color: '#1B4B66', marginTop: 6 },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E4DFD2',
-    padding: 14,
-    marginBottom: 8,
-  },
-  unidade: { fontSize: 14, fontWeight: '700', color: '#211F1B', marginBottom: 6 },
-  ninguem: { fontSize: 12, color: '#B6512E' },
-  morador: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 },
-  nome: { fontSize: 13, color: '#211F1B', flexShrink: 1 },
-  papel: { fontSize: 11, color: '#6B665D' },
-  cargo: { fontSize: 10, color: '#1B4B66', fontWeight: '700', textTransform: 'uppercase' },
-  pendente: {
-    fontSize: 10,
-    color: '#C98A1F',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  vazio: { textAlign: 'center', color: '#6B665D', marginTop: 30 },
+  pressionado: { backgroundColor: cores.superficieAlt },
+  nome: { fontSize: 13, color: cores.texto, fontWeight: '600', flexShrink: 1 },
+  papel: { fontSize: 11, color: cores.textoFraco },
 });

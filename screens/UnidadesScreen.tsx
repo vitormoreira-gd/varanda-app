@@ -1,18 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  Button,
-  Pressable,
-  FlatList,
-  Share,
-  StyleSheet,
-  RefreshControl,
-  Alert,
-} from 'react-native';
+import { View, Text, FlatList, Share, StyleSheet, RefreshControl, Alert } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useMeuCondominio } from '../lib/useMeuCondominio';
+import { cores, espaco } from '../lib/tema';
+import { Botao, Campo, Cartao, Secao, Vazio } from '../components/ui';
 
 type Unidade = {
   id: string;
@@ -159,58 +150,80 @@ export default function UnidadesScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.form}>
-        <Text style={styles.subtitulo}>Cadastrar unidades</Text>
+      <Cartao>
+        <Text style={styles.formTitulo}>Cadastrar unidades</Text>
+        <Text style={styles.formDica}>
+          Aceita intervalo (101-110), lista (11, 12, 21) ou os dois juntos.
+        </Text>
         <View style={styles.linha}>
-          <TextInput
-            style={[styles.input, { flex: 1 }]}
+          <Campo
+            rotulo="Bloco"
             value={bloco}
             onChangeText={setBloco}
-            placeholder="Bloco (opcional)"
+            placeholder="opcional"
+            estilo={{ flex: 1 }}
           />
-          <TextInput
-            style={[styles.input, { flex: 2 }]}
+          <Campo
+            rotulo="Números"
             value={numeros}
             onChangeText={setNumeros}
-            placeholder="101-110 ou 11, 12, 21"
+            placeholder="101-110"
+            estilo={{ flex: 2 }}
           />
         </View>
-        <Button title="Criar" onPress={criarUnidades} disabled={busy} />
-      </View>
+        <Botao
+          titulo="Criar unidades"
+          onPress={criarUnidades}
+          disabled={busy}
+          carregando={busy}
+          estilo={{ marginTop: espaco.lg }}
+        />
+      </Cartao>
 
       <FlatList
         data={unidades}
         keyExtractor={(item) => item.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: espaco.xxl }}
         ListHeaderComponent={
-          <Text style={styles.contador}>
-            {unidades.length} unidade(s) cadastrada(s)
-          </Text>
+          unidades.length > 0 ? (
+            <Secao titulo={`${unidades.length} unidade${unidades.length === 1 ? '' : 's'}`} />
+          ) : null
         }
         ListEmptyComponent={
-          <Text style={styles.vazio}>
-            Nenhuma unidade ainda. Cadastre as unidades pra poder convidar os moradores.
-          </Text>
+          <Vazio
+            icone="🔑"
+            titulo="Nenhuma unidade ainda"
+            texto="Cada unidade ganha um código de convite próprio, que você compartilha com o morador."
+          />
         }
         renderItem={({ item }) => {
           const moradores = moradoresPorUnidade[item.id] ?? 0;
           return (
-            <View style={styles.card}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.unidade}>
-                  {item.bloco ? `${item.bloco} · ` : ''}
-                  {item.numero}
-                </Text>
-                <Text style={styles.codigo}>{item.codigo_convite ?? 'sem código'}</Text>
-                <Text style={styles.moradores}>
-                  {moradores === 0 ? 'ninguém entrou ainda' : `${moradores} morador(es)`}
-                </Text>
+            <Cartao>
+              <View style={styles.cardLinha}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.unidade}>
+                    {item.bloco ? `${item.bloco} · ` : ''}
+                    {item.numero}
+                  </Text>
+                  <Text style={styles.moradores}>
+                    {moradores === 0
+                      ? 'ninguém entrou ainda'
+                      : moradores === 1
+                        ? '1 morador'
+                        : `${moradores} moradores`}
+                  </Text>
+                </View>
+                <Botao
+                  titulo="Convidar"
+                  variante="secundario"
+                  pequeno
+                  onPress={() => compartilhar(item)}
+                />
               </View>
-              <Pressable onPress={() => compartilhar(item)} hitSlop={8}>
-                <Text style={styles.compartilhar}>Compartilhar</Text>
-              </Pressable>
-            </View>
+              <Text style={styles.codigo}>{item.codigo_convite ?? 'sem código'}</Text>
+            </Cartao>
           );
         }}
       />
@@ -219,40 +232,23 @@ export default function UnidadesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  form: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E4DFD2',
-    padding: 14,
-    gap: 8,
-    marginBottom: 12,
+  container: { flex: 1, backgroundColor: cores.fundo, paddingHorizontal: espaco.lg },
+  formTitulo: { fontSize: 15, fontWeight: '700', color: cores.texto },
+  formDica: { fontSize: 12, color: cores.textoFraco, marginTop: espaco.xs, marginBottom: espaco.md },
+  linha: { flexDirection: 'row', gap: espaco.sm },
+  cardLinha: { flexDirection: 'row', alignItems: 'center', gap: espaco.md },
+  unidade: { fontSize: 15, fontWeight: '800', color: cores.texto },
+  moradores: { fontSize: 12, color: cores.textoFraco, marginTop: 2 },
+  codigo: {
+    fontSize: 13,
+    color: cores.primaria,
+    fontFamily: 'monospace',
+    letterSpacing: 1,
+    marginTop: espaco.md,
+    backgroundColor: cores.primariaFundo,
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: espaco.md,
+    alignSelf: 'flex-start',
   },
-  subtitulo: { fontSize: 14, fontWeight: '700', color: '#1B4B66' },
-  linha: { flexDirection: 'row', gap: 8 },
-  input: {
-    borderWidth: 1,
-    borderColor: '#E4DFD2',
-    borderRadius: 10,
-    padding: 10,
-    backgroundColor: '#fff',
-  },
-  contador: { fontSize: 12, color: '#6B665D', marginBottom: 8 },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E4DFD2',
-    padding: 14,
-    marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  unidade: { fontSize: 15, fontWeight: '700', color: '#211F1B' },
-  codigo: { fontSize: 13, color: '#1B4B66', fontFamily: 'monospace', marginTop: 2 },
-  moradores: { fontSize: 11, color: '#6B665D', marginTop: 2 },
-  compartilhar: { fontSize: 13, color: '#1B4B66', fontWeight: '600' },
-  vazio: { textAlign: 'center', color: '#6B665D', marginTop: 40 },
 });

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Pressable, Alert, RefreshControl } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Alert, RefreshControl } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { cores, espaco } from '../lib/tema';
+import { Botao, Cartao, Vazio } from '../components/ui';
 
 type Vinculo = {
   id: string;
@@ -31,9 +33,19 @@ export default function VinculosPendentesScreen() {
   }, [carregar]);
 
   async function aprovar(id: string) {
-    const { error } = await supabase.from('vinculos').update({ status: 'aprovado' }).eq('id', id);
+    // Update recusado por RLS devolve zero linhas, não erro (armadilha nº4).
+    const { data, error } = await supabase
+      .from('vinculos')
+      .update({ status: 'aprovado' })
+      .eq('id', id)
+      .select();
+
     if (error) {
       Alert.alert('Erro ao aprovar', error.message);
+      return;
+    }
+    if (!data || data.length === 0) {
+      Alert.alert('Não consegui aprovar', 'O banco recusou a alteração.');
       return;
     }
     carregar();
@@ -51,43 +63,40 @@ export default function VinculosPendentesScreen() {
       data={lista}
       keyExtractor={(item) => item.id}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      contentContainerStyle={{ paddingBottom: 40, paddingTop: 12 }}
-      ListEmptyComponent={<Text style={styles.vazio}>Nenhuma solicitação pendente.</Text>}
+      contentContainerStyle={{ paddingBottom: espaco.xxl }}
+      ListEmptyComponent={
+        <Vazio
+          icone="✅"
+          titulo="Nenhuma solicitação pendente"
+          texto="Quem entrar com um código de convite aparece aqui esperando aprovação."
+        />
+      }
       renderItem={({ item }) => (
-        <View style={styles.card}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.nome}>{item.usuarios?.nome ?? 'Sem nome'}</Text>
-            <Text style={styles.meta}>
-              {item.unidades ? `Bloco ${item.unidades.bloco ?? '-'}, apto ${item.unidades.numero}` : 'Unidade não encontrada'}
-              {' · '}
-              {item.papel}
-            </Text>
+        <Cartao>
+          <View style={styles.linha}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.nome}>{item.usuarios?.nome ?? 'Sem nome'}</Text>
+              <Text style={styles.meta}>
+                {item.unidades
+                  ? [item.unidades.bloco, `apto ${item.unidades.numero}`]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : 'Unidade não encontrada'}
+                {' · '}
+                {item.papel}
+              </Text>
+            </View>
+            <Botao titulo="Aprovar" pequeno onPress={() => aprovar(item.id)} />
           </View>
-          <Pressable style={styles.aprovarBtn} onPress={() => aprovar(item.id)}>
-            <Text style={styles.aprovarTexto}>Aprovar</Text>
-          </Pressable>
-        </View>
+        </Cartao>
       )}
     />
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2EFE6', paddingHorizontal: 16 },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#E4DFD2',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  nome: { fontWeight: '700', fontSize: 14, color: '#211F1B' },
-  meta: { fontSize: 12, color: '#6B665D', marginTop: 2 },
-  aprovarBtn: { backgroundColor: '#43715B', borderRadius: 20, paddingVertical: 7, paddingHorizontal: 14 },
-  aprovarTexto: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  vazio: { textAlign: 'center', color: '#6B665D', marginTop: 30 },
+  container: { flex: 1, backgroundColor: cores.fundo, paddingHorizontal: espaco.lg },
+  linha: { flexDirection: 'row', alignItems: 'center', gap: espaco.md },
+  nome: { fontWeight: '700', fontSize: 14, color: cores.texto },
+  meta: { fontSize: 12, color: cores.textoFraco, marginTop: 2 },
 });
