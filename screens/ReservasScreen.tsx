@@ -1,30 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  Button,
-  Pressable,
-  FlatList,
-  StyleSheet,
-  Platform,
-  RefreshControl,
-  Alert,
-} from 'react-native';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { View, Text, FlatList, StyleSheet, RefreshControl, Alert } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useMeuCondominio } from '../lib/useMeuCondominio';
-import { paraDataISO, formatarDataCurta } from '../lib/datas';
+import { hojeISO, paraDataISO, formatarDataCurta } from '../lib/datas';
+import { cores, espaco } from '../lib/tema';
+import { Botao, Campo, Carregando, Cartao, Etiqueta, Link, Tom, Vazio } from '../components/ui';
+import Calendario from '../components/Calendario';
+import { useAvisoRapido } from '../components/AvisoRapido';
 
 const STATUS_LABEL: Record<string, string> = {
   pendente: 'Pendente',
   aprovada: 'Aprovada',
   recusada: 'Recusada',
 };
-const STATUS_COR: Record<string, { bg: string; cor: string }> = {
-  pendente: { bg: '#F6E7C8', cor: '#C98A1F' },
-  aprovada: { bg: '#DEE9E1', cor: '#43715B' },
-  recusada: { bg: '#F7E4DA', cor: '#B6512E' },
+const STATUS_TOM: Record<string, Tom> = {
+  pendente: 'atencao',
+  aprovada: 'ok',
+  recusada: 'critico',
 };
 
 type Reserva = {
@@ -37,15 +29,13 @@ type Reserva = {
   usuarios: { nome: string } | null;
 };
 
-export default function ReservasScreen() {
-  const { condominioId, unidadeId, podeGerir } = useMeuCondominio();
+export default function ReservasScreen({ atualizacao }: { atualizacao?: number }) {
+  const { condominioId, podeGerir } = useMeuCondominio();
+  const { mostrar } = useAvisoRapido();
   const [userId, setUserId] = useState<string | null>(null);
   const [lista, setLista] = useState<Reserva[]>([]);
-  const [dataEscolhida, setDataEscolhida] = useState<Date>(new Date());
-  const [mostrarCalendario, setMostrarCalendario] = useState(false);
-  const [observacao, setObservacao] = useState('');
-  const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [decidindo, setDecidindo] = useState<string | null>(null);
 
   const ehSindico = podeGerir;
 
@@ -53,6 +43,11 @@ export default function ReservasScreen() {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
+  // A consulta continua sem filtro de unidade: quem filtra é a policy. Pro
+  // morador voltam só as reservas da própria unidade; pra quem gere, todas.
+  // Fazer o filtro aqui também seria repetir a regra em dois lugares, e é o
+  // banco que manda — a lista fechou porque o calendário passou a entregar a
+  // disponibilidade, não porque a tela deixou de exibir.
   const carregar = useCallback(async () => {
     if (!condominioId) return;
 
@@ -61,7 +56,7 @@ export default function ReservasScreen() {
       .select(
         'id, data, status, observacao, usuario_id, unidades!unidade_id(bloco, numero), usuarios!usuario_id(nome)'
       )
-      .gte('data', paraDataISO(new Date()))
+      .gte('data', hojeISO())
       .order('data', { ascending: true });
 
     if (error) {
@@ -71,59 +66,19 @@ export default function ReservasScreen() {
     setLista((data as unknown as Reserva[]) ?? []);
   }, [condominioId]);
 
+  // `atualizacao` é incrementado pelo host quando o botão + cria uma reserva.
   useEffect(() => {
     carregar();
-  }, [carregar]);
-
-  function onChangeData(event: DateTimePickerEvent, selecionada?: Date) {
-    if (Platform.OS === 'android') setMostrarCalendario(false);
-    if (event.type === 'dismissed') return;
-    if (selecionada) setDataEscolhida(selecionada);
-  }
-
-  async function pedirReserva() {
-    if (!condominioId || !unidadeId || !userId) {
-      Alert.alert('Aviso', 'Não identifiquei sua unidade ainda. Feche e reabra o app.');
-      return;
-    }
-
-    const data = paraDataISO(dataEscolhida);
-    setBusy(true);
-    const { error } = await supabase.from('reservas').insert({
-      condominio_id: condominioId,
-      unidade_id: unidadeId,
-      usuario_id: userId,
-      data,
-      observacao: observacao.trim() || null,
-    });
-    setBusy(false);
-
-    if (error) {
-      // 23505 = unique_violation. Os dois índices parciais que impedem
-      // conflito de data batem aqui, e a mensagem crua do Postgres não
-      // ajudaria em nada o morador.
-      if (error.code === '23505') {
-        Alert.alert(
-          'Data indisponível',
-          'Ou o salão já está reservado nessa data, ou sua unidade já tem um pedido pendente pra ela.'
-        );
-        return;
-      }
-      Alert.alert('Erro ao pedir reserva', error.message);
-      return;
-    }
-
-    setObservacao('');
-    Alert.alert('Pedido enviado', 'O síndico precisa aprovar. Você vê o status nesta tela.');
-    carregar();
-  }
+  }, [carregar, atualizacao]);
 
   async function decidir(reserva: Reserva, aprovar: boolean) {
+    setDecidindo(reserva.id);
     const { data, error } = await supabase
       .from('reservas')
       .update({ status: aprovar ? 'aprovada' : 'recusada' })
       .eq('id', reserva.id)
       .select();
+    setDecidindo(null);
 
     if (error) {
       if (error.code === '23505') {
@@ -138,6 +93,7 @@ export default function ReservasScreen() {
       Alert.alert('Não consegui', 'O banco recusou a alteração. Confira se você é síndico.');
       return;
     }
+    mostrar(aprovar ? 'Reserva aprovada' : 'Reserva recusada');
     carregar();
   }
 
@@ -163,6 +119,7 @@ export default function ReservasScreen() {
       Alert.alert('Não consegui cancelar', 'O banco recusou a remoção.');
       return;
     }
+    mostrar('Pedido cancelado');
     carregar();
   }
 
@@ -173,147 +130,259 @@ export default function ReservasScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.form}>
-        <Text style={styles.subtitulo}>Reservar o salão</Text>
-
-        <Pressable style={styles.dataBtn} onPress={() => setMostrarCalendario(true)}>
-          <Text style={styles.dataBtnTexto}>
-            {dataEscolhida.toLocaleDateString('pt-BR', {
-              weekday: 'short',
-              day: '2-digit',
-              month: 'long',
-            })}
-          </Text>
-        </Pressable>
-
-        {mostrarCalendario && (
-          <DateTimePicker
-            value={dataEscolhida}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'inline' : 'default'}
-            minimumDate={new Date()}
-            onChange={onChangeData}
-          />
-        )}
-        {Platform.OS === 'ios' && mostrarCalendario && (
-          <Button title="Concluído" onPress={() => setMostrarCalendario(false)} />
-        )}
-
-        <TextInput
-          style={styles.input}
-          placeholder="Motivo (opcional): aniversário, reunião..."
-          value={observacao}
-          onChangeText={setObservacao}
+    <FlatList
+      style={styles.container}
+      data={lista}
+      keyExtractor={(item) => item.id}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      contentContainerStyle={{ paddingBottom: 96 }}
+      ListEmptyComponent={
+        <Vazio
+          icone="🎉"
+          titulo={ehSindico ? 'Salão livre daqui pra frente' : 'Você não tem reserva marcada'}
+          texto={
+            ehSindico
+              ? 'Nenhum pedido em aberto para as próximas datas.'
+              : 'Toque no + para pedir uma data. O calendário mostra o que ainda está livre.'
+          }
         />
-        <Button title="Pedir reserva" onPress={pedirReserva} disabled={busy} />
-      </View>
+      }
+      renderItem={({ item }) => {
+        const minha = item.usuario_id === userId;
+        const unidade = item.unidades
+          ? `${item.unidades.bloco ? `${item.unidades.bloco} ` : ''}${item.unidades.numero}`
+          : '';
 
-      <FlatList
-        data={lista}
-        keyExtractor={(item) => item.id}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        contentContainerStyle={{ paddingBottom: 40 }}
-        ListHeaderComponent={<Text style={styles.secao}>Próximas datas</Text>}
-        ListEmptyComponent={
-          <Text style={styles.vazio}>Nenhuma reserva pedida daqui pra frente.</Text>
-        }
-        renderItem={({ item }) => {
-          const cor = STATUS_COR[item.status] ?? STATUS_COR.pendente;
-          const minha = item.usuario_id === userId;
-          const unidade = item.unidades
-            ? `${item.unidades.bloco ? `${item.unidades.bloco} ` : ''}${item.unidades.numero}`
-            : '';
-
-          return (
-            <View style={styles.card}>
-              <View style={styles.cardTop}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.data}>{formatarDataCurta(item.data)}</Text>
-                  <Text style={styles.quem}>
-                    {item.usuarios?.nome ?? 'Vizinho'}
-                    {unidade ? ` · ${unidade}` : ''}
-                    {minha ? ' · você' : ''}
-                  </Text>
-                  {item.observacao && <Text style={styles.observacao}>{item.observacao}</Text>}
-                </View>
-                <View style={[styles.status, { backgroundColor: cor.bg }]}>
-                  <Text style={[styles.statusTexto, { color: cor.cor }]}>
-                    {STATUS_LABEL[item.status] ?? item.status}
-                  </Text>
-                </View>
+        return (
+          <Cartao>
+            <View style={styles.cardTop}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.data}>{formatarDataCurta(item.data)}</Text>
+                <Text style={styles.quem}>
+                  {item.usuarios?.nome ?? 'Vizinho'}
+                  {unidade ? ` · ${unidade}` : ''}
+                  {minha ? ' · você' : ''}
+                </Text>
+                {item.observacao ? (
+                  <Text style={styles.observacao}>{item.observacao}</Text>
+                ) : null}
               </View>
-
-              {ehSindico && item.status === 'pendente' && (
-                <View style={styles.acoes}>
-                  <Pressable onPress={() => decidir(item, true)} hitSlop={6}>
-                    <Text style={styles.aprovar}>Aprovar</Text>
-                  </Pressable>
-                  <Pressable onPress={() => decidir(item, false)} hitSlop={6}>
-                    <Text style={styles.recusar}>Recusar</Text>
-                  </Pressable>
-                </View>
-              )}
-
-              {minha && item.status !== 'recusada' && (
-                <Pressable onPress={() => confirmarCancelamento(item)} hitSlop={6}>
-                  <Text style={styles.cancelar}>Cancelar meu pedido</Text>
-                </Pressable>
-              )}
+              <Etiqueta
+                texto={STATUS_LABEL[item.status] ?? item.status}
+                tom={STATUS_TOM[item.status] ?? 'neutro'}
+              />
             </View>
-          );
-        }}
+
+            {ehSindico && item.status === 'pendente' && (
+              <View style={styles.acoes}>
+                <Botao
+                  titulo="Aprovar"
+                  pequeno
+                  carregando={decidindo === item.id}
+                  onPress={() => decidir(item, true)}
+                  estilo={{ flex: 1 }}
+                />
+                <Botao
+                  titulo="Recusar"
+                  variante="perigo"
+                  pequeno
+                  disabled={decidindo === item.id}
+                  onPress={() => decidir(item, false)}
+                  estilo={{ flex: 1 }}
+                />
+              </View>
+            )}
+
+            {minha && item.status !== 'recusada' && (
+              <View style={{ marginTop: espaco.md, alignSelf: 'flex-start' }}>
+                <Link
+                  titulo="Cancelar meu pedido"
+                  tom="perigo"
+                  onPress={() => confirmarCancelamento(item)}
+                />
+              </View>
+            )}
+          </Cartao>
+        );
+      }}
+    />
+  );
+}
+
+// ---------- FORMULÁRIO ----------
+
+export function FormularioSalao({ aoConcluir }: { aoConcluir: () => void }) {
+  const { condominioId, unidadeId } = useMeuCondominio();
+  const { mostrar } = useAvisoRapido();
+  const [userId, setUserId] = useState<string | null>(null);
+  const [data, setData] = useState<string | null>(null);
+  const [indisponiveis, setIndisponiveis] = useState<ReadonlySet<string>>(new Set());
+  const [carregandoDatas, setCarregandoDatas] = useState(true);
+  const [observacao, setObservacao] = useState('');
+  const [enviando, setEnviando] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+  }, []);
+
+  // As datas bloqueadas vêm de duas origens porque os dois índices parciais
+  // do banco são dois: `reservas_uma_aprovada_por_data` (o salão já está
+  // reservado, por qualquer unidade) e `reservas_um_pedido_por_unidade_data`
+  // (esta unidade já pediu esta data). Os dois estouram o mesmo 23505, então
+  // se só um deles fosse desenhado o morador continuaria batendo no erro.
+  //
+  // A primeira precisa do RPC: desde que a lista do salão passou a mostrar só
+  // as reservas da própria unidade, o cliente não consegue mais ler as dos
+  // outros. `datas_ocupadas` devolve só as datas — sem unidade, sem nome, sem
+  // motivo — que é exatamente o que o calendário precisa e nada além.
+  useEffect(() => {
+    if (!condominioId) return;
+    let ativo = true;
+
+    (async () => {
+      const de = hojeISO();
+      const ate = paraDataISO(new Date(new Date().getFullYear(), new Date().getMonth() + 8, 1));
+
+      const [ocupadas, minhas] = await Promise.all([
+        supabase.rpc('datas_ocupadas', {
+          p_condominio_id: condominioId,
+          p_de: de,
+          p_ate: ate,
+        }),
+        // Sem unidade não há segundo índice pra respeitar — e mandar string
+        // vazia como uuid derruba a consulta com "invalid input syntax".
+        unidadeId
+          ? supabase.from('reservas').select('data, status').eq('unidade_id', unidadeId).gte('data', de)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (!ativo) return;
+
+      if (ocupadas.error) {
+        Alert.alert('Erro ao consultar a agenda do salão', ocupadas.error.message);
+        setCarregandoDatas(false);
+        return;
+      }
+      if (minhas.error) {
+        Alert.alert('Erro ao consultar seus pedidos', minhas.error.message);
+        setCarregandoDatas(false);
+        return;
+      }
+
+      const bloqueadas = new Set<string>(
+        ((ocupadas.data as unknown as string[]) ?? []).filter(Boolean)
+      );
+      for (const r of (minhas.data as { data: string; status: string }[]) ?? []) {
+        // Recusada não bloqueia: é justamente a data que dá pra pedir de novo.
+        if (r.status !== 'recusada') bloqueadas.add(r.data);
+      }
+
+      setIndisponiveis(bloqueadas);
+      setCarregandoDatas(false);
+    })();
+
+    return () => {
+      ativo = false;
+    };
+  }, [condominioId, unidadeId]);
+
+  async function enviar() {
+    if (!condominioId || !unidadeId || !userId) {
+      Alert.alert('Aviso', 'Não identifiquei sua unidade ainda. Feche e reabra o app.');
+      return;
+    }
+    if (!data) return;
+
+    setEnviando(true);
+    const { error } = await supabase.from('reservas').insert({
+      condominio_id: condominioId,
+      unidade_id: unidadeId,
+      usuario_id: userId,
+      data,
+      observacao: observacao.trim() || null,
+    });
+    setEnviando(false);
+
+    if (error) {
+      // 23505 = unique_violation. O calendário já desenha as duas regras que
+      // batem aqui, então isto virou rede de segurança: alguém aprovou um
+      // pedido para esta data entre a abertura do formulário e o envio.
+      if (error.code === '23505') {
+        Alert.alert(
+          'Data indisponível',
+          'Alguém garantiu essa data enquanto você preenchia. Escolha outra.'
+        );
+        setIndisponiveis((atual) => new Set(atual).add(data));
+        setData(null);
+        return;
+      }
+      Alert.alert('Erro ao pedir reserva', error.message);
+      return;
+    }
+
+    mostrar('Pedido enviado ao síndico');
+    aoConcluir();
+  }
+
+  return (
+    <View>
+      <Text style={styles.rotulo}>Escolha a data</Text>
+
+      {carregandoDatas ? (
+        <Carregando texto="Consultando a agenda do salão..." />
+      ) : (
+        <Calendario valor={data} aoEscolher={setData} indisponiveis={indisponiveis} />
+      )}
+
+      <Text style={styles.aviso}>
+        Datas riscadas já estão reservadas ou já foram pedidas pela sua unidade.
+      </Text>
+
+      <Campo
+        rotulo="Motivo (opcional)"
+        placeholder="Aniversário, reunião de família..."
+        value={observacao}
+        onChangeText={setObservacao}
+        estilo={{ marginTop: espaco.lg }}
+      />
+
+      <Text style={styles.aviso}>
+        O síndico precisa aprovar. Você acompanha o status na lista do Salão.
+      </Text>
+
+      <Botao
+        titulo={data ? `Pedir ${formatarDataCurta(data)}` : 'Escolha uma data'}
+        onPress={enviar}
+        disabled={!data || enviando}
+        carregando={enviando}
+        estilo={{ marginTop: espaco.md }}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  form: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E4DFD2',
-    padding: 14,
-    gap: 8,
-    marginBottom: 12,
+  container: { flex: 1, backgroundColor: cores.fundo, paddingHorizontal: espaco.lg },
+  rotulo: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: cores.textoFraco,
+    marginBottom: espaco.xs,
   },
-  subtitulo: { fontSize: 14, fontWeight: '700', color: '#1B4B66' },
-  dataBtn: {
-    borderWidth: 1,
-    borderColor: '#E4DFD2',
-    borderRadius: 10,
-    padding: 12,
-    backgroundColor: '#F2EFE6',
-    alignItems: 'center',
+  aviso: {
+    fontSize: 11,
+    color: cores.textoFraco,
+    lineHeight: 16,
+    marginTop: espaco.md,
   },
-  dataBtnTexto: { color: '#1B4B66', fontWeight: '600', fontSize: 14, textTransform: 'capitalize' },
-  input: {
-    borderWidth: 1,
-    borderColor: '#E4DFD2',
-    borderRadius: 10,
-    padding: 10,
-    backgroundColor: '#F2EFE6',
+  cardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: espaco.sm,
   },
-  secao: { fontSize: 13, fontWeight: '700', color: '#1B4B66', marginBottom: 8 },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E4DFD2',
-    padding: 14,
-    marginBottom: 8,
-  },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
-  data: { fontSize: 15, fontWeight: '700', color: '#211F1B', textTransform: 'capitalize' },
-  quem: { fontSize: 12, color: '#6B665D', marginTop: 2 },
-  observacao: { fontSize: 13, color: '#6B665D', marginTop: 6 },
-  status: { borderRadius: 20, paddingVertical: 3, paddingHorizontal: 9 },
-  statusTexto: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase' },
-  acoes: { flexDirection: 'row', gap: 18, marginTop: 12 },
-  aprovar: { fontSize: 13, color: '#43715B', fontWeight: '700' },
-  recusar: { fontSize: 13, color: '#B6512E', fontWeight: '700' },
-  cancelar: { fontSize: 12, color: '#B6512E', marginTop: 10 },
-  vazio: { textAlign: 'center', color: '#6B665D', marginTop: 30 },
+  data: { fontSize: 15, fontWeight: '700', color: cores.texto },
+  quem: { fontSize: 12, color: cores.textoFraco, marginTop: 2 },
+  observacao: { fontSize: 13, color: cores.textoFraco, marginTop: espaco.sm },
+  acoes: { flexDirection: 'row', gap: espaco.sm, marginTop: espaco.md },
 });
