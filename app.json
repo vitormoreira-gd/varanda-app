@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "varanda-app",
-    "slug": "varanda-app",
+    "name": "Varanda",
+    "slug": "varanda",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -21,7 +21,9 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "app.varanda.condominio",
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png"

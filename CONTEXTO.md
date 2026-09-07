@@ -45,19 +45,23 @@ O feedback do síndico manda mais que qualquer item do backlog — a segunda pas
 - **O `.apk` do próprio Varanda.** Deixou de ser só conveniência: enquanto o app depender do Expo Go, cada atualização da loja quebra a demonstração (armadilha nº27). Um APK de preview também elimina a dependência do Metro e do Wi-Fi na hora H.
 ### Roteiro da apresentação
 
+*Reescrito em 07/09/2026, junto com o seed novo: o prédio passou de 6 para 42 unidades e de 5 para 32 pessoas.*
+
 Na ordem em que a demonstração se conta sozinha:
 
-1. Entrar como **Síndico**. Mural povoado, Oficial com aviso fixado + votação aberta + assembleia marcada, Regras versão 2.
-2. Gestão → **Vínculos**: a Tereza está esperando aprovação. Aprovar ao vivo.
-3. Gestão → **Condôminos**: 67% de adesão, o 103 vazio. É a métrica que o trial vai precisar.
-4. Solicitações → **Salão**: aprovar o pedido pendente do 102 na frente dele. Repare que o síndico vê as duas reservas, de unidades diferentes.
-5. Solicitações → **Manutenção**: quatro pedidos, e um deles com a etiqueta **"Só na unidade"** — a torneira do 202.
-6. Perfil → trocar para **Morador**. O aviso restrito, a votação restrita e a reunião do conselho **somem**. Esse é o momento que vende.
-7. Ainda como Morador, Solicitações → **Salão**: sobra só a reserva do 202, e o **+** abre um calendário com as datas ocupadas riscadas. A privacidade não custou a informação — ele continua sabendo o que está livre, só não sabe de quem é.
-8. Ainda como Morador, **Manutenção**: a torneira dele continua lá (é dele), e os três pedidos de área comum também.
-9. Perfil → trocar para **Conselho fiscal**. Gestão abre em faixa âmbar, sem botão nenhum — e a torneira do 202 **some**, porque conselho fiscal fiscaliza contas, não queixa doméstica.
+1. Entrar como **Síndico**. O Mural abre povoado, com conversa de gente de verdade — a manutenção do elevador com nove curtidas e três comentários, e a dona Terezinha perguntando onde fica o botão de confirmar presença, com a Marina explicando. **Esse post é o que mostra que o app foi feito pra quem não é técnico**, e é o mais barato de apontar.
+2. **Oficial**: aviso fixado da manutenção do elevador, votação do corrimão aberta com 17 unidades já votando, assembleia marcada com 9 presenças confirmadas, Regras na versão 2.
+3. **Gestão**: a barra de baixo abre com **2** na bolinha de Moradores. Abrir **Vínculos** e aprovar a Tereza ao vivo — a bolinha vira 1 na hora, sem sair da aba.
+4. Gestão → **Condôminos**: 28 das 42 unidades ocupadas, 67% de adesão, e as 14 vazias listadas. É a métrica que o trial vai precisar.
+5. Solicitações → **Salão**: cinco reservas de cinco unidades diferentes. Aprovar o pedido pendente do 102 na frente dele.
+6. Solicitações → **Manutenção**: dez pedidos, com o badge de tempo em aberto nas três cores — vermelho no corrimão solto (9 dias sem ninguém tocar), âmbar na infiltração, e resolvido na lâmpada. Dois têm a etiqueta **"Só na unidade"**.
+7. Perfil → trocar para **Morador** (Caio, 202). Somem o aviso restrito das propostas de elevador, a votação restrita e a reunião do conselho. **Esse é o momento que vende.**
+8. Ainda como Morador, Solicitações → **Salão**: sobra só a reserva dele. O **+** abre o calendário com as três datas aprovadas riscadas — a privacidade não custou a informação: ele continua sabendo o que está livre, só não sabe de quem é.
+9. Ainda como Morador, **Manutenção**: a torneira dele continua lá (é dele), os oito de área comum também, e o mofo do 604 **não** aparece.
+10. Perfil → trocar para **Conselho fiscal**. Gestão abre em faixa âmbar, com duas sub-abas só e sem botão nenhum — e os dois pedidos privados **somem**, porque conselho fiscal fiscaliza contas, não queixa doméstica.
 
 O ponto que mais importa testar é o do vazamento pelos filhos (armadilha nº8): como Morador, a votação restrita não pode aparecer **nem os votos dela**.
+
 
 ## O que ainda NÃO foi testado no celular
 
@@ -115,9 +119,12 @@ varanda-app/
 ├── App.tsx                          — auth gate + CondominioProvider + tab navigator com ícones
 │                                        (Oficial · Mural · Solicitações · Gestão). Perfil NÃO é
 │                                        aba: abre pelo avatar do cabeçalho
+├── app.json                         — nome, ícone e `android.package` (app.varanda.condominio)
+├── eas.json                         — perfis de build; `preview` gera o APK da apresentação
+├── .easignore                       — o que sobe pro EAS. Existe pra o `.env` subir junto
 ├── db/
 │   ├── varanda-schema.sql           — DDL completo, idempotente. FONTE DA VERDADE do banco.
-│   ├── seed-demo.sql                — condomínio fictício da apresentação; re-executável
+│   ├── seed-demo.sql                — Ed. Alvorada: 42 unidades, 32 pessoas. Re-executável
 │   └── snippets-teste.sql           — atalhos de SQL pro teste manual (não é migração)
 ├── components/
 │   ├── ui.tsx                       — Botao, Link, Avatar, Cartao, Campo, Chip, Etiqueta,
@@ -381,6 +388,10 @@ Decisão do Vitor, e a mais estrutural desta sessão. O raciocínio: **"solicita
 - **Gestão entrou no padrão de sub-abas**, e era a última aba fora dele — usava o `Seletor` de pílulas rolando na horizontal, no topo. Os seis destinos não cabiam na barra de baixo (com seis itens sobra ~60dp cada, e "Condôminos" e "Manutenção" truncariam), então os três que respondem à mesma pergunta — quem mora aqui — viraram painéis dentro de **Moradores**, e a barra ficou com quatro, igual ao Oficial. Nenhuma das três telas foi reescrita; só mudaram de casa. Pro conselho fiscal sobram duas sub-abas, e o seletor interno some, porque uma pílula sozinha não é escolha.
 - **Badge de vínculos pendentes** sobre o ícone de Moradores. Quem conta é o próprio `VinculosPendentesScreen`, que já fazia a consulta: devolve o número por callback em vez de o host repetir a pergunta ao banco. O efeito é que a bolinha some no instante em que o síndico aprova alguém — que é exatamente o passo 2 do roteiro, feito ao vivo. O callback mora num `useRef` e não nas dependências do `carregar`, senão um pai que passasse arrow inline poria o efeito em laço.
 - **Duas ideias descartadas no caminho:** pôr as seis sub-abas de uma vez (trunca rótulo) e fundir Vínculos com Condôminos numa tela só com filtro pendentes/aprovados. A segunda é melhor de produto — são a mesma pergunta em dois estados — e foi recusada por ser reescrita de duas telas na véspera. Continua valendo como ideia.
+- **Seed de demonstração reescrito do zero.** O prédio deixou de ser um esboço de 6 unidades e virou um condomínio plausível: **7 andares, 6 apartamentos por andar, 42 unidades, 28 ocupadas (67%), 32 pessoas e 2 vínculos pendentes**. É um prédio **antigo e simples** — um elevador só, sem piscina, sem portaria 24h (há um zelador diurno), com garagem de vagas cobertas e descobertas e um salão pequeno. A maioria dos moradores é idosa, e isso decide o conteúdo inteiro: os relatos são corrimão solto, elevador parando desnivelado, piso que escorrega na chuva e interfone que não toca.
+- **Os 27 vizinhos são conteúdo, não logins.** `usuarios.id` tem FK para `auth.users(id)`, então não há como um vizinho assinar um post sem uma linha lá. O seed cria essas linhas por SQL (função `demo_conta`, `security definer`, apagada no fim do arquivo) mas **não cria `auth.identities`** — dá pra ver o nome deles, não dá pra entrar com eles. As cinco contas de demonstração continuam sendo criadas à mão no painel, que é onde o hash de senha e a identidade saem certos.
+- **O post que mais vale na apresentação não é feature nenhuma:** a dona Terezinha perguntando no Mural onde fica o botão de confirmar presença, e a Marina explicando. Ele existe pra mostrar que o app espera usuário não-técnico — e que o próprio Mural absorve o suporte.
+- **Configuração de build criada**: `app.json` com `android.package = app.varanda.condominio` e nome "Varanda", `eas.json` com perfil `preview` (APK, `distribution: internal`) e `.easignore`. O `.easignore` existe por um motivo específico: quando presente, o EAS usa ele no lugar do `.gitignore` pra decidir o que enviar — e o `.gitignore` esconde o `.env`. Sem isso o APK sairia sem `EXPO_PUBLIC_SUPABASE_URL`, e o app abriria quebrado. Declarar as variáveis em `eas.json` resolveria também, mas esse arquivo é versionado e o repositório é público.
 - **O Expo Go da loja parou de servir** no meio do teste (armadilha nº27). Consertado instalando o APK do Expo Go 54 à mão.
 
 Ambiente: decidido em 20/08/2026 continuar testando **só no celular**. Não há SDK Android na máquina (os quatro Unity instalados estão sem o módulo AndroidPlayer), e emulador custaria ~10 GB. Expo Web foi descartado porque `react-native-web` não implementa `Alert`, e este app usa `Alert.alert` para todo feedback de erro e toda confirmação destrutiva — testar lá esconderia justamente a classe de bug mais comum aqui. O emulador só passa a valer quando a dor for testar síndico e morador lado a lado.

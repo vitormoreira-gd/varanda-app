@@ -1,0 +1,47 @@
+# O que NÃO sobe para o servidor de build do EAS.
+#
+# Este arquivo existe por um motivo específico: quando ele está presente, o
+# EAS usa ELE no lugar do .gitignore para decidir o que enviar. E o
+# .gitignore esconde o `.env`, que é justamente onde moram
+# EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY e
+# EXPO_PUBLIC_DEMO.
+#
+# Sem isso, o APK sairia sem nenhuma variável: o app abriria e falharia ao
+# criar o client do Supabase, e os atalhos de "entrar como <papel>" não
+# apareceriam na tela de login.
+#
+# A alternativa seria declarar as variáveis em `eas.json` — mas esse arquivo
+# é versionado, e o repositório é público. Aqui o `.env` viaja direto da sua
+# máquina para o build, sem passar pelo Git.
+
+node_modules/
+.git/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# SQL não entra no app
+db/
+
+# Nativo gerado
+/ios
+/android
+.kotlin/
+*.orig.*
+
+# Credenciais de assinatura — essas realmente não podem subir
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# Ruído
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+*.tsbuildinfo
