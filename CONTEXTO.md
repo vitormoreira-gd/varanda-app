@@ -6,21 +6,19 @@ Este arquivo existe pra dar contexto rápido a qualquer instância do Claude (ou
 
 # Onde retomar
 
-*Última sessão: 21/08/2026. Bloco escrito no fim da sessão pra próxima instância (ou pro Vitor) não precisar reconstruir estado.*
+*Última sessão: 07/09/2026. Bloco escrito no fim da sessão pra próxima instância (ou pro Vitor) não precisar reconstruir estado.*
 
 ## Estado
 
-- Branch `main`, sem remote (só local).
-- `db/migracao-cargos.sql` e `db/seed-demo.sql` **aplicados** em 21/08/2026. O arquivo de migração de cargos foi apagado, como o próprio cabeçalho dele mandava; o seed fica, porque é re-executável e reseta a demonstração.
-- **Uma migração pendente:** `db/migracao-mural.sql`, com quatro coisas — (1) `papeis_do_meu_condominio()`, que diz quem é síndico/subsíndico pro Mural marcar embaixo do nome; (2) policy de `cargos` reescrita, escondendo o conselho fiscal do morador comum; (3) gatilho de **um aviso fixado por vez**; (4) check constraint impedindo **aviso restrito fixado**. Sem ela o Mural mostra "Erro ao carregar cargos" e as regras de destaque do Oficial não valem. Já dobrada em `db/varanda-schema.sql`; **apagar depois de aplicada**.
-- **Segunda migração pendente:** `db/migracao-votos.sql` — policy de `update` em `votos` (trocar o voto enquanto a votação está aberta), prazo (`data_fim > now()`) somado à policy de insert, e a policy de select reescrita pra esconder a apuração do morador comum. Sem ela o app deixa tocar em outra opção, mas o banco recusa e aparece "Não consegui trocar o voto". Já dobrada em `db/varanda-schema.sql`; **apagar depois de aplicada**. Não mexe em dados.
-- **Terceira migração pendente:** `db/migracao-solicitacoes.sql` — converte as sugestões ativas em posts do Mural e as curtidas correspondentes. Mexe em dados, mas é reversível: a coluna `sugestoes.migrado_para_post` guarda de onde veio cada post, e as tabelas `sugestoes`/`apoios` continuam de pé até você conferir no celular.
-- **Quarta migração pendente:** `db/migracao-privacidade.sql` — a coluna `area_comum` em `problemas`, as policies de `problemas`, `historico_status` e `reservas` reescritas, e a função `datas_ocupadas()`. **Rodar por último.** Sem ela o formulário de Manutenção e o formulário do Salão dão erro na cara: um grava numa coluna que não existe, o outro chama uma função que não existe. Já dobrada em `db/varanda-schema.sql`; **apagar depois de aplicada**.
-- A migração de mural desfixa o aviso restrito que o seed tinha criado fixado. O arquivo do seed também foi corrigido, então re-rodar o seed não reintroduz o problema.
+- Branch `main`, com remote desde 07/09/2026: **https://github.com/vitormoreira-gd/varanda-app**, **público**. Criado pelo `gh` (GitHub CLI, instalado na máquina no mesmo dia). O `.env` está no `.gitignore` e nunca foi commitado — só o `.env.example`, com placeholders.
+- **As quatro migrações que estavam pendentes foram aplicadas em 07/09/2026**: mural, votos, solicitações e privacidade. Os arquivos foram apagados, como o cabeçalho de cada um mandava. Tudo já estava dobrado em `db/varanda-schema.sql`, que segue sendo a fonte da verdade do banco. **Não há migração pendente.**
+- `db/migracao-cargos.sql` e `db/seed-demo.sql` aplicados em 21/08/2026. O seed fica, porque é re-executável e reseta a demonstração — e já nasce com o aviso restrito desfixado, então re-rodá-lo não reintroduz o problema que a migração de mural corrigiu.
+- `sugestoes` e `apoios` **continuam de pé no banco**, de propósito: era o que mantinha a migração de solicitações reversível. Apagá-las (`drop table apoios;` e depois `drop table sugestoes;`) é item de backlog, não de pressa.
 - App rodando no celular via Expo Go. Nenhum emulador na máquina, e foi decidido continuar assim.
-- IP da máquina em 21/08/2026: `exp://192.168.15.6:8081`. Muda se a rede mudar — conferir com `ipconfig` (o adaptador **Ethernet**, não o "Topaz Loopback", que devolve um IP público da AWS e não serve).
+- **O Expo Go da Play Store não serve mais.** Ele só suporta o SDK mais recente — 57 em 07/09/2026 — e o projeto está no 54. O celular roda o APK do **Expo Go 54.0.8**, instalado à mão. Ver armadilha nº27: isso volta a cada SDK novo, e a cura definitiva é o `.apk` do próprio Varanda.
+- IP da máquina em 07/09/2026: `exp://192.168.15.7:8081` — era `.6` em agosto. Muda se a rede mudar — conferir com `ipconfig` (o adaptador **Ethernet**, não o "Topaz Loopback", que devolve um IP público da AWS e não serve).
 
-## O objetivo mudou nesta sessão
+## O objetivo: apresentar a um síndico
 
 O alvo agora é **apresentar** o app a um síndico — ele vê, você conduz, e o feedback é a saída. Não é piloto: ele não vai instalar nem usar com o prédio dele.
 
@@ -32,26 +30,19 @@ Isso reordenou o roadmap:
 
 ## Próximo passo
 
-*Atualizado em 22/08/2026: os itens 2 e 3, que estavam decididos e por escrever, foram escritos. Sobra rodar as migrações e ensaiar.*
+*Atualizado em 07/09/2026. As migrações foram aplicadas, a Gestão entrou no padrão de sub-abas e o projeto ganhou repositório. **A apresentação está marcada para 08/09/2026.***
 
-### 1. Rodar as quatro migrações pendentes, nesta ordem
+### 1. Ensaiar a apresentação inteira no celular
 
-`db/migracao-mural.sql` → `db/migracao-votos.sql` → `db/migracao-solicitacoes.sql` → `db/migracao-privacidade.sql`.
+É o único item antes da apresentação, e é a mesma pendência que atravessou três sessões: nada do que entrou em 21/08, 22/08 e 07/09 foi exercitado com gente de verdade. Roteiro logo abaixo.
 
-A quarta é a desta sessão (manutenção privada + salão individual). Ela não depende das outras três pra funcionar — só de `pode_gerir()`, que veio na migração de cargos, já aplicada. Fica por último porque a de solicitações mexe em dados e convém conferi-la antes.
+### 2. Depois da apresentação
 
-**Sem a quarta o app quebra em dois lugares:** o formulário de Manutenção grava `area_comum`, que ainda não existe como coluna, e o formulário do Salão chama `datas_ocupadas()`, que ainda não existe como função. Não é degradação silenciosa — é erro na cara.
+O feedback do síndico manda mais que qualquer item do backlog — a segunda passada de layout, em particular, existe justamente pra acontecer depois dele. Se o feedback não reordenar tudo, os candidatos são:
 
-Depois, **ensaiar a apresentação inteira no celular**. Nada do que entrou em 21 e 22/08 foi exercitado com gente de verdade.
-
-### 2. Manutenção: área comum vs. minha unidade — FEITO em 22/08/2026
-
-Ver *Status atual*. Sobrou como decisão em aberto: nada.
-
-### 3. Salão individual, com datas bloqueadas no calendário — FEITO em 22/08/2026
-
-Ver *Status atual*. Sobrou como decisão em aberto: nada.
-
+- **Divulgar o resultado de uma votação encerrada.** Hoje o morador vota e nunca fica sabendo do desfecho pelo app; a tela diz que o síndico divulga, e não há caminho pra isso além de publicar um aviso na mão. Colide de frente com "apuração só pro gabinete", e o padrão do projeto sugere a saída: um RPC `resultado_votacao()` que devolva **só a contagem agregada** depois de `data_fim`, sem revelar qual unidade votou o quê — mesma forma de `datas_ocupadas()` e `papeis_do_meu_condominio()`.
+- **`db/metricas.sql`** — consultas prontas pro painel do Supabase, pra ter número na conversa de feedback. Custo baixo, e quase tudo que importa já está nas tabelas.
+- **O `.apk` do próprio Varanda.** Deixou de ser só conveniência: enquanto o app depender do Expo Go, cada atualização da loja quebra a demonstração (armadilha nº27). Um APK de preview também elimina a dependência do Metro e do Wi-Fi na hora H.
 ### Roteiro da apresentação
 
 Na ordem em que a demonstração se conta sozinha:
@@ -72,10 +63,12 @@ O ponto que mais importa testar é o do vazamento pelos filhos (armadilha nº8):
 
 O Vitor disse em 21/08 que já exercitou boa parte da lista anterior (reserva do salão, arquivamento, cancelamento de reunião, badge de dias, lista de condôminos). O que continua sem teste:
 
-1. **Subsíndico, conselho fiscal e canal restrito** — a migração foi aplicada, mas o comportamento não foi exercitado.
+1. **Subsíndico, conselho fiscal e canal restrito** — as migrações estão aplicadas, mas o comportamento nunca foi exercitado.
 2. **Tudo que entrou em 21/08**: modo demonstração, seed, a passada de layout, a reforma de navegação + Mural, o Oficial em sub-abas, a enquete de votação e a reorganização de Solicitações. Zero minutos de tela.
 3. **Tudo que entrou em 22/08**: manutenção privada, salão individual e o calendário próprio. O calendário é o item mais arriscado da lista — é componente novo, escrito à mão, e a grade de mês nunca rodou em aparelho. Conferir especialmente a virada de mês e o dia 1 caindo no dia da semana certo.
+4. **Tudo que entrou em 07/09**: a Gestão em sub-abas e o badge de vínculos pendentes. O `npx tsc --noEmit` passa limpo, mas isso não diz se "Manutenção" cabe na barra sem truncar, nem se a bolinha some no instante da aprovação.
 
+Em 07/09 o app chegou a conectar no celular com o Expo Go 54 e ficou pronto pra testar — o resultado do teste não chegou a ser registrado aqui.
 ## Como subir o ambiente
 
 ```
@@ -124,8 +117,6 @@ varanda-app/
 │                                        aba: abre pelo avatar do cabeçalho
 ├── db/
 │   ├── varanda-schema.sql           — DDL completo, idempotente. FONTE DA VERDADE do banco.
-│   ├── migracao-mural.sql           — PENDENTE de rodar no Supabase; apagar depois de aplicada
-│   ├── migracao-privacidade.sql     — PENDENTE; manutenção privada + salão individual
 │   ├── seed-demo.sql                — condomínio fictício da apresentação; re-executável
 │   └── snippets-teste.sql           — atalhos de SQL pro teste manual (não é migração)
 ├── components/
@@ -163,7 +154,8 @@ varanda-app/
 │   ├── RegrasScreen.tsx              — card de leitura das regras, renderizado dentro do Oficial
 │   ├── RegrasEditarScreen.tsx        — síndico edita as regras (dentro de Gestão)
 │   ├── OficialCriarScreen.tsx        — visão síndico: criar aviso/votação/reunião (usado dentro de Gestão)
-│   ├── GestaoScreen.tsx              — host síndico: Vínculos/Condôminos/Unidades/Sugestões/Problemas/Oficial/Regras
+│   ├── GestaoScreen.tsx              — host síndico em sub-abas: Moradores (Vínculos/Condôminos/
+│   │                                     Unidades) · Manutenção · Oficial · Regras
 │   ├── UnidadesScreen.tsx            — síndico cadastra unidades em lote e compartilha convites
 │   ├── CondominosScreen.tsx          — síndico vê quem entrou, unidade por unidade
 │   ├── VinculosPendentesScreen.tsx   — síndico aprova vínculo pendente
@@ -215,7 +207,7 @@ Regras do condomínio, **aplicada no Supabase em 20/08/2026** e já dobrada dent
 - Sem tabela de histórico de versões, de propósito: o rastro de cada alteração é o próprio aviso publicado, que já fica no Oficial. `versao` é um contador pro aviso citar.
 - Salvar com o texto idêntico ao já publicado devolve a versão atual, não incrementa e **não** dispara aviso — senão o síndico spamaria o prédio ao abrir e fechar a tela.
 
-Cargos (subsíndico e conselho fiscal) e canal restrito, **migração `db/migracao-cargos.sql` pendente de aplicar** e já dobrada dentro de `varanda-schema.sql`. É a mudança mais invasiva feita até hoje no banco — 21 policies reescritas:
+Cargos (subsíndico e conselho fiscal) e canal restrito, **aplicado em 21/08/2026** e dobrado dentro de `varanda-schema.sql`. É a mudança mais invasiva feita até hoje no banco — 21 policies reescritas:
 - tabela `cargos` (`condominio_id`, `usuario_id`, `cargo`, unique no par) e enum `cargo_condominio` com **apenas** `subsindico` e `conselho`. O síndico continua morando em `vinculos.papel`, de propósito: uma fonte de verdade por cargo, sem risco de o banco discordar de si mesmo sobre quem é síndico.
 - **Por que tabela separada e não estender o enum:** `vinculos.papel` mistura relação com a unidade (proprietário/inquilino) e cargo no condomínio (síndico) desde o schema original — um síndico que aluga aparece como `sindico` e a informação de que é inquilino se perde. Com `cargos` os dois convivem: dá pra ser inquilino do 302 **e** subsíndico.
 - Três funções novas em cima de `eh_sindico()`, que continua existindo: `tem_cargo(condominio, cargos[])`, **`pode_gerir()`** (síndico ou subsíndico — escrita) e **`pode_fiscalizar()`** (os dois mais o conselho — leitura ampliada). As policies de escrita trocaram `eh_sindico()` por `pode_gerir()`.
@@ -223,13 +215,13 @@ Cargos (subsíndico e conselho fiscal) e canal restrito, **migração `db/migrac
 - `restrito boolean` em `avisos`, `votacoes` e `reunioes`: o canal do gabinete. A policy de select vira `condominio_id in (...) and (not restrito or pode_fiscalizar(condominio_id))`.
 - **Armadilha nova, e a mais importante desta leva:** as policies de `votos`, `rsvps`, `curtidas` e `comentarios` reconferiam só o condomínio do pai, nunca a visibilidade dele. Sem repetir a cláusula de `restrito` dentro delas, o vizinho não veria a votação restrita mas leria os votos dela. Foram reescritas junto — e o mesmo cuidado vale pra qualquer restrição futura (relato confidencial vai cair exatamente aqui).
 
-Trocar o voto, **migração `db/migracao-votos.sql` pendente** e já dobrada no schema:
+Trocar o voto, **aplicado em 07/09/2026** e dobrado no schema:
 - policy de `update` em `votos`. Voto é **por unidade**, então quem troca não precisa ser quem lançou: qualquer morador aprovado da mesma unidade pode. É o voto do 302, não o do Fulano. O `with check` grava `usuario_id = auth.uid()`, registrando quem trocou por último.
 - **Sem policy de delete, de propósito:** dá pra *trocar* o voto, não pra retirá-lo. Retratar-se para "não votei" mudaria o denominador do quórum, e isso é decisão de assembleia, não de tela.
 - **Apuração só pro gabinete.** A policy de select liberava o condomínio inteiro: um morador comum lia pela API não só o placar como **qual unidade votou o quê**. O voto nunca foi secreto — a tela é que não mostrava. Agora cada um enxerga o voto da própria unidade (a tela precisa saber o que marcar) e quem `pode_fiscalizar()` enxerga todos. O conselho entra junto de propósito: conferir apuração é o que o cargo existe pra fazer.
 - A policy de insert nunca checou o prazo — a tela sempre filtrou por `data_fim`, mas nada impedia votar em votação encerrada direto pela API. Corrigido junto: com insert e update coexistindo, critérios diferentes divergiriam.
 
-Solicitação privada, **migração `db/migracao-privacidade.sql` pendente** e já dobrada no schema:
+Solicitação privada, **aplicada em 07/09/2026** e dobrada no schema:
 - `area_comum boolean not null default true` em `problemas`. Default `true` de propósito: a visibilidade pública é o que entrega dedup e pressão (ver *Status atual*), e quem não pensar no assunto publica pro prédio.
 - A policy de select de `problemas` virou `condominio_id in (...) and (area_comum or autor_id = auth.uid() or pode_gerir(condominio_id))`, e a de `historico_status` repete a cláusula inteira — armadilha nº8, mesma dos votos da votação restrita.
 - **`pode_gerir()` e não `pode_fiscalizar()`**, aqui e nas reservas. É a única exceção do app, e é decisão do Vitor: conselho fiscal fiscaliza contas, não queixa doméstica nem festa de vizinho.
@@ -267,6 +259,8 @@ Fica registrado pra quando deixar de ser: **no dia em que existir cadastro de te
 24. **`\n` dentro de heredoc de shell vira quebra de linha real** e parte a string do TypeScript. Aconteceu duas vezes nesta sessão ao editar arquivo por script. Para texto com `\n`, editar com a ferramenta de edição direta em vez de heredoc.
 25. **O `DateTimePicker` nativo não desabilita datas soltas.** Ele só aceita `minimumDate` e `maximumDate` — não há como riscar o dia 20 e deixar o 19 e o 21 clicáveis. Onde o requisito é "mostre o que está ocupado antes de pedir" (reserva do salão), ele não serve, e a saída foi uma grade de mês escrita à mão em `components/Calendario.tsx`. Continua sendo o componente certo pra reunião, onde qualquer dia serve e ainda há hora junto.
 26. **`@expo/vector-icons` vem com o `expo` mas não hoistado** — mora em `node_modules/expo/node_modules/`, então `import ... from '@expo/vector-icons'` no código do app não resolve pelo Metro. Precisa de `npx expo install @expo/vector-icons` pra subir de nível. Vale pra qualquer dependência transitiva do Expo que você queira importar direto.
+27. **O Expo Go só suporta o SDK mais recente, e a Play Store atualiza sozinha.** Em 07/09/2026 o celular amanheceu com o Expo Go do SDK 57 e recusou o projeto, que está no 54 — na véspera da apresentação. O APK antigo existe e resolve: `https://expo.dev/go?sdkVersion=54&platform=android&device=true` entrega o `Expo-Go-54.0.8.apk` (177 MB, do repositório `expo/expo-go-releases`). Mas **é preciso desinstalar o Expo Go atual antes**: é o mesmo pacote (`host.exp.exponent`) e o Android recusa downgrade com `INSTALL_FAILED_VERSION_DOWNGRADE`. Vale desligar a atualização automática dele também, senão a loja desfaz o conserto. Isso volta a cada SDK novo — a cura definitiva é o `.apk` do próprio Varanda.
+28. **Escrever arquivo por script converte CRLF em LF sem avisar.** Parte dos arquivos do projeto está com CRLF; um `write` em Python (ou qualquer redirecionamento de shell) grava LF, e o `git diff` passa a acusar o arquivo inteiro modificado — 1099 linhas num arquivo de 534. O conteúdo fica certo e a revisão fica impossível. Conferir com `git diff --stat` depois de editar por script, e restaurar o final de linha original quando for o caso. É primo da armadilha nº24, do mesmo lado: editar código por script tem pegadinhas que a ferramenta de edição direta não tem.
 
 ## Status atual
 
@@ -380,6 +374,15 @@ Decisão do Vitor, e a mais estrutural desta sessão. O raciocínio: **"solicita
 - **Isso mata a decisão que estava pendente sobre o motivo da reserva:** sem lista pública não há o que esconder, e `observacao` não precisa sair pra tabela separada.
 - O seed ganhou um **quarto pedido de manutenção, privado**, do Caio (a conta "Morador"). É o que faz a régua aparecer na demonstração: síndico e subsíndico veem com etiqueta, o autor vê, o **conselho fiscal não vê**.
 
+**Sessão de 07/09/2026 — véspera da apresentação.** Sessão de arrumação, não de feature nova. A apresentação ficou marcada para 08/09.
+
+- **As quatro migrações pendentes foram aplicadas** e os arquivos apagados. O banco finalmente está no ponto que `db/varanda-schema.sql` descreve — era a dívida que atravessou duas sessões, e sem ela os passos 4, 5, 7 e 8 do roteiro dariam erro na cara: o formulário de Manutenção gravava numa coluna inexistente e o do Salão chamava uma função inexistente.
+- **Repositório no GitHub**, público: https://github.com/vitormoreira-gd/varanda-app. O `gh` foi instalado na máquina pra isso. Fica registrado, porque foi decisão consciente do Vitor: público expõe o `CONTEXTO.md` inteiro, plano de negócio, preço de R$ 5/condômino e estratégia de trial junto. O `.env` nunca foi commitado; a senha de demonstração (`demo1234`) está no código, mas sozinha não abre nada — a URL do projeto Supabase e a chave só existem no `.env` local. **No dia em que sair um `.apk`, a chave vai assada no build e esse par vira credencial funcional.**
+- **Gestão entrou no padrão de sub-abas**, e era a última aba fora dele — usava o `Seletor` de pílulas rolando na horizontal, no topo. Os seis destinos não cabiam na barra de baixo (com seis itens sobra ~60dp cada, e "Condôminos" e "Manutenção" truncariam), então os três que respondem à mesma pergunta — quem mora aqui — viraram painéis dentro de **Moradores**, e a barra ficou com quatro, igual ao Oficial. Nenhuma das três telas foi reescrita; só mudaram de casa. Pro conselho fiscal sobram duas sub-abas, e o seletor interno some, porque uma pílula sozinha não é escolha.
+- **Badge de vínculos pendentes** sobre o ícone de Moradores. Quem conta é o próprio `VinculosPendentesScreen`, que já fazia a consulta: devolve o número por callback em vez de o host repetir a pergunta ao banco. O efeito é que a bolinha some no instante em que o síndico aprova alguém — que é exatamente o passo 2 do roteiro, feito ao vivo. O callback mora num `useRef` e não nas dependências do `carregar`, senão um pai que passasse arrow inline poria o efeito em laço.
+- **Duas ideias descartadas no caminho:** pôr as seis sub-abas de uma vez (trunca rótulo) e fundir Vínculos com Condôminos numa tela só com filtro pendentes/aprovados. A segunda é melhor de produto — são a mesma pergunta em dois estados — e foi recusada por ser reescrita de duas telas na véspera. Continua valendo como ideia.
+- **O Expo Go da loja parou de servir** no meio do teste (armadilha nº27). Consertado instalando o APK do Expo Go 54 à mão.
+
 Ambiente: decidido em 20/08/2026 continuar testando **só no celular**. Não há SDK Android na máquina (os quatro Unity instalados estão sem o módulo AndroidPlayer), e emulador custaria ~10 GB. Expo Web foi descartado porque `react-native-web` não implementa `Alert`, e este app usa `Alert.alert` para todo feedback de erro e toda confirmação destrutiva — testar lá esconderia justamente a classe de bug mais comum aqui. O emulador só passa a valer quando a dor for testar síndico e morador lado a lado.
 
 MVP funcionalmente completo e testado (antes desta sessão): cadastro → vínculo por código de convite → aprovação pelo síndico → Mural, Sugestões (com apoio), Problemas (com histórico de status), Oficial (avisos fixados, votação por unidade, reunião com RSVP e seletor de data/hora nativo) → Gestão do síndico pra tudo isso.
@@ -439,7 +442,7 @@ O nó técnico: o primeiro síndico é um paradoxo igual ao do `vincular_por_cod
 - [x] Cadastro de unidades em lote — `UnidadesScreen`, aceita intervalo (`101-110`), lista (`11, 12, 21`) e mistura; ignora as que já existem
 - [x] Distribuição dos códigos de convite — lista de unidades com código e botão de compartilhar (Share nativo), mostrando quantos moradores já entraram em cada uma
 - [x] Perfil e vínculo por convite — a `EntradaScreen` cria a linha em `usuarios` e chama `vincular_por_codigo`, que existia no banco mas nenhuma tela usava
-- [ ] Sem unique em `(condominio_id, bloco, numero)`: a checagem de duplicata é só no client. Dois síndicos do mesmo prédio criando unidades ao mesmo tempo duplicam
+- [x] `unique (condominio_id, bloco, numero)` — índice `unidades_sem_duplicata`, aplicado em 20/08/2026. A checagem deixou de ser só no client
 
 ### Vagas de garagem
 - [ ] Solicitação de troca de vaga entre condôminos (pedir, aceitar/recusar, histórico de trocas) — já anunciado como *em breve* na folha do + em Solicitações
@@ -451,6 +454,8 @@ O nó técnico: o primeiro síndico é um paradoxo igual ao do `vincular_por_cod
 - [x] Canal restrito ao gabinete — aviso, votação e reunião com flag `restrito`, visíveis só a quem `pode_fiscalizar()`. Pedido do Vitor no meio da implementação de cargos
 
 ### Infraestrutura
+- [x] Repositório no GitHub — `vitormoreira-gd/varanda-app`, público, criado em 07/09/2026
+- [ ] README do repositório — hoje quem abre cai direto na lista de arquivos; o `CONTEXTO.md` faz o trabalho, mas é documento interno e inclui o plano de negócio
 - [ ] Push notifications (avisos, votação aberta, reunião marcada, resposta no feed etc. chegando como notificação, não só ao abrir o app)
 
 ### UX geral
@@ -475,7 +480,10 @@ O nó técnico: o primeiro síndico é um paradoxo igual ao do `vincular_por_cod
 - [ ] Arrastar-para-fechar por cima de lista rolável — depende de `react-native-gesture-handler`; as outras três saídas cobrem enquanto isso
 - [x] Solicitações reorganizada: Sugestões fora do app, Problemas virou Manutenção, sub-abas no formato do Oficial e criação pelo +
 - [ ] Apagar `sugestoes` e `apoios` do banco, depois de conferir a migração no celular
-- [ ] Mudanças na aba Gestão — ainda não detalhadas
+- [x] Gestão no padrão de sub-abas — barra de baixo com Moradores · Manutenção · Oficial · Regras, e Vínculos/Condôminos/Unidades como painéis dentro de Moradores. Era a última aba fora do padrão
+- [x] Badge de vínculos pendentes sobre o ícone de Moradores, alimentado pela própria tela de vínculos
+- [ ] Fundir Vínculos e Condôminos numa tela só com filtro pendentes/aprovados — são a mesma pergunta em dois estados. Recusado em 07/09 por ser reescrita de duas telas na véspera da apresentação
+- [ ] Outras mudanças na aba Gestão — ainda não detalhadas
 
 ### Apresentação
 - [x] Modo demonstração — atalhos de papel na tela de login e seletor no Perfil, atrás do flag `EXPO_PUBLIC_DEMO`
@@ -631,7 +639,7 @@ MVP completo e em uso num condomínio real. Um condomínio novo entra sozinho, s
 - ~~Cancelar reunião, com aviso automático junto~~ **FEITO**
 - ~~Arquivar sugestões/problemas + acesso ao arquivo~~ **FEITO**
 - ~~Lista de condôminos~~ **FEITO** — a decisão sobre `telefone` caiu junto: as colunas são mortas, não há o que proteger hoje
-- ~~`unique (condominio_id, bloco, numero)`~~ **FEITO** (índice `unidades_sem_duplicata`, na migração pendente)
+- ~~`unique (condominio_id, bloco, numero)`~~ **FEITO** (índice `unidades_sem_duplicata`, aplicado em 20/08/2026)
 
 ## Fase 3 — Gestão do condomínio
 
