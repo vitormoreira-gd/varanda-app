@@ -124,7 +124,7 @@ export default function GestaoScreen() {
 
 const styles = StyleSheet.create({
   legenda: {
-    fontSize: 12,
+    fontSize: 14,
     color: cores.textoFraco,
     paddingHorizontal: espaco.lg,
     paddingTop: espaco.md,
@@ -138,5 +138,5 @@ const styles = StyleSheet.create({
     paddingVertical: espaco.sm,
     paddingHorizontal: espaco.md,
   },
-  faixaTexto: { fontSize: 12, color: cores.atencao, fontWeight: '600' },
+  faixaTexto: { fontSize: 14, color: cores.atencao, fontWeight: '600' },
 });

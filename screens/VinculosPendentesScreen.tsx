@@ -110,6 +110,6 @@ export default function VinculosPendentesScreen({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: cores.fundo, paddingHorizontal: espaco.lg },
   linha: { flexDirection: 'row', alignItems: 'center', gap: espaco.md },
-  nome: { fontWeight: '700', fontSize: 14, color: cores.texto },
-  meta: { fontSize: 12, color: cores.textoFraco, marginTop: 2 },
+  nome: { fontWeight: '700', fontSize: 16, color: cores.texto },
+  meta: { fontSize: 14, color: cores.textoFraco, marginTop: 2 },
 });

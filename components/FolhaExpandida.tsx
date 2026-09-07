@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
   // não competir com o gesto, então quem recebe o toque é esta camada.
   areaFundo: { flex: 1 },
   folha: {
-    backgroundColor: cores.fundo,
+    backgroundColor: cores.superficie,
     borderTopLeftRadius: raio.md * 1.6,
     borderTopRightRadius: raio.md * 1.6,
     overflow: 'hidden',

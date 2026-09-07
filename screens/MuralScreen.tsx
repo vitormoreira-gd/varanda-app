@@ -708,30 +708,30 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...sombra,
   },
-  cardCorpo: { padding: espaco.lg, paddingBottom: espaco.md },
+  cardCorpo: { padding: espaco.lg, paddingBottom: espaco.lg },
 
   autorLinha: { flexDirection: 'row', alignItems: 'center', gap: espaco.md },
   autorTopo: { flexDirection: 'row', alignItems: 'center', gap: espaco.sm },
-  autorNome: { flex: 1, fontSize: 15, fontWeight: '800', color: cores.texto },
-  autorHora: { fontSize: 11, color: cores.textoFraco },
+  autorNome: { flex: 1, fontSize: 17, fontWeight: '800', color: cores.texto },
+  autorHora: { fontSize: 13, color: cores.textoFraco },
   // O rótulo de cargo é a única coisa colorida do cabeçalho do card: precisa
   // saltar sem competir com o nome.
   autorPapel: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
     color: cores.primaria,
     marginTop: 1,
   },
 
-  texto: { fontSize: 15, color: cores.texto, lineHeight: 22, marginTop: espaco.md },
-  lerMais: { fontSize: 13, color: cores.primaria, fontWeight: '700', marginTop: espaco.xs },
+  texto: { fontSize: 17, color: cores.texto, lineHeight: 25, marginTop: espaco.lg },
+  lerMais: { fontSize: 15, color: cores.primaria, fontWeight: '700', marginTop: espaco.xs },
 
   resumo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: espaco.md,
+    marginTop: espaco.lg,
   },
-  resumoTexto: { fontSize: 12, color: cores.textoFraco },
+  resumoTexto: { fontSize: 14, color: cores.textoFraco },
 
   barraAcoes: {
     flexDirection: 'row',
@@ -749,7 +749,7 @@ const styles = StyleSheet.create({
     paddingVertical: espaco.md,
     minHeight: 48,
   },
-  acaoTexto: { fontSize: 14, fontWeight: '700' },
+  acaoTexto: { fontSize: 16, fontWeight: '700' },
 
   fab: {
     position: 'absolute',
@@ -778,9 +778,9 @@ const styles = StyleSheet.create({
   // Post aberto e pra LER: corpo maior e mais arejado que o do feed,
   // que existe pra ser varrido.
   textoAberto: {
-    fontSize: 17,
+    fontSize: 19,
     color: cores.texto,
-    lineHeight: 27,
+    lineHeight: 31,
     marginTop: espaco.md,
     marginBottom: espaco.md,
   },
@@ -794,9 +794,9 @@ const styles = StyleSheet.create({
     marginBottom: espaco.sm,
   },
   comentarioTexto: {
-    fontSize: 14,
+    fontSize: 16,
     color: cores.texto,
-    lineHeight: 20,
+    lineHeight: 23,
     marginTop: espaco.sm,
   },
 
@@ -829,7 +829,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: cores.borda,
   },
-  topoModalTitulo: { fontSize: 16, fontWeight: '800', color: cores.texto },
+  topoModalTitulo: { fontSize: 18, fontWeight: '800', color: cores.texto },
   corpoModal: { padding: espaco.lg, flex: 1 },
-  campoPost: { minHeight: 160, fontSize: 16, lineHeight: 23 },
+  campoPost: { minHeight: 160, fontSize: 18, lineHeight: 26 },
 });

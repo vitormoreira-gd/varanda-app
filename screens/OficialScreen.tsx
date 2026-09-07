@@ -9,6 +9,7 @@ import {
   Pressable,
   ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { useMeuCondominio } from '../lib/useMeuCondominio';
@@ -70,6 +71,10 @@ type ItemOficial = {
   tituloRiscado?: boolean;
   meta?: string;
   texto: string;
+  /** Mostra um trecho do texto já no card fechado. Só o item em destaque
+   *  ganha isso: se todo card abrir um parágrafo, a lista vira um paredão e
+   *  o destaque deixa de destacar. Os outros ficam em título e data. */
+  previa?: boolean;
   /** Aparece no card fechado e no corpo da folha (as opções de votação). */
   acoes?: ReactNode;
   /** Barra fixa no rodapé da folha (confirmar presença). Quando existe, o
@@ -294,6 +299,8 @@ export default function OficialScreen() {
           titulo: a.titulo,
           meta: formatarData(a.criado_em),
           texto: a.texto,
+          // Um aviso por vez em evidência: o fixado. O resto se lê ao tocar.
+          previa: a.fixado,
         }))
       : sub === 'reunioes'
         ? reunioes.map((r) => {
@@ -399,8 +406,12 @@ export default function OficialScreen() {
 // mais justamente no que é o objetivo da tela.
 
 function CartaoResumo({ item, aoAbrir }: { item: ItemOficial; aoAbrir: () => void }) {
-  const longo = item.texto.length > LIMITE_TEXTO;
+  const comPrevia = !!item.previa && !!item.texto;
+  const longo = comPrevia && item.texto.length > LIMITE_TEXTO;
   const visivel = longo ? item.texto.slice(0, LIMITE_TEXTO).trimEnd() + '…' : item.texto;
+  // Sem trecho de texto, o card perde a pista de que há mais coisa dentro.
+  // A seta devolve isso — e é a única pista de que tocar leva a algum lugar.
+  const temMais = !comPrevia && !!item.texto;
 
   return (
     <View
@@ -411,9 +422,18 @@ function CartaoResumo({ item, aoAbrir }: { item: ItemOficial; aoAbrir: () => voi
     >
       <Pressable onPress={aoAbrir}>
         {item.etiquetas ? <View style={styles.etiquetas}>{item.etiquetas}</View> : null}
-        <Text style={[styles.titulo, item.tituloRiscado && styles.riscado]}>{item.titulo}</Text>
-        {item.meta ? <Text style={styles.meta}>{item.meta}</Text> : null}
-        {item.texto ? <Text style={styles.texto}>{visivel}</Text> : null}
+        <View style={styles.tituloLinha}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.titulo, item.tituloRiscado && styles.riscado]}>
+              {item.titulo}
+            </Text>
+            {item.meta ? <Text style={styles.meta}>{item.meta}</Text> : null}
+          </View>
+          {temMais && (
+            <Ionicons name="chevron-forward" size={22} color={cores.textoFraco} />
+          )}
+        </View>
+        {comPrevia ? <Text style={styles.texto}>{visivel}</Text> : null}
         {longo && <Text style={styles.lerMais}>Ler mais</Text>}
       </Pressable>
 
@@ -674,11 +694,12 @@ const styles = StyleSheet.create({
     ...sombra,
   },
   etiquetas: { flexDirection: 'row', flexWrap: 'wrap', gap: espaco.sm, marginBottom: espaco.sm },
-  titulo: { fontWeight: '700', fontSize: 15, color: cores.texto },
+  tituloLinha: { flexDirection: 'row', alignItems: 'center', gap: espaco.sm },
+  titulo: { fontWeight: '700', fontSize: 17, color: cores.texto },
   riscado: { textDecorationLine: 'line-through', color: cores.textoFraco },
-  meta: { fontSize: 12, color: cores.textoFraco, marginTop: espaco.xs },
-  texto: { fontSize: 14, color: cores.textoFraco, marginTop: espaco.sm, lineHeight: 21 },
-  lerMais: { fontSize: 13, color: cores.primaria, fontWeight: '700', marginTop: espaco.xs },
+  meta: { fontSize: 14, color: cores.textoFraco, marginTop: espaco.xs },
+  texto: { fontSize: 16, color: cores.textoFraco, marginTop: espaco.sm, lineHeight: 24 },
+  lerMais: { fontSize: 15, color: cores.primaria, fontWeight: '700', marginTop: espaco.xs },
   acoes: { marginTop: espaco.md },
 
   // Aberto é pra ler, não pra varrer: título maior, corpo em 17/27, e mais
@@ -688,18 +709,18 @@ const styles = StyleSheet.create({
     paddingTop: espaco.lg,
     paddingBottom: espaco.xxl,
   },
-  folhaTitulo: { fontSize: 22, fontWeight: '800', color: cores.texto, lineHeight: 29 },
-  folhaMeta: { fontSize: 13, color: cores.textoFraco, marginTop: espaco.sm },
+  folhaTitulo: { fontSize: 25, fontWeight: '800', color: cores.texto, lineHeight: 33 },
+  folhaMeta: { fontSize: 15, color: cores.textoFraco, marginTop: espaco.sm },
   regua: {
     height: 1,
     backgroundColor: cores.borda,
     marginTop: espaco.lg,
     marginBottom: espaco.lg,
   },
-  folhaTexto: { fontSize: 17, color: cores.texto, lineHeight: 27 },
+  folhaTexto: { fontSize: 19, color: cores.texto, lineHeight: 31 },
   folhaAcoes: { marginTop: espaco.xl },
 
-  rodapeVoto: { fontSize: 12, color: cores.textoFraco, marginTop: espaco.md },
+  rodapeVoto: { fontSize: 14, color: cores.textoFraco, marginTop: espaco.md },
 
   opcao: { flexDirection: 'row', alignItems: 'center', gap: espaco.md, paddingVertical: espaco.xs },
   marcador: {
@@ -712,7 +733,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   marcadorAtivo: { backgroundColor: cores.primaria, borderColor: cores.primaria },
-  marcadorCheque: { color: cores.textoClaro, fontSize: 13, fontWeight: '900' },
+  marcadorCheque: { color: cores.textoClaro, fontSize: 15, fontWeight: '900' },
   opcaoTopo: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -721,10 +742,10 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     minHeight: 20,
   },
-  opcaoTexto: { flex: 1, fontSize: 14, color: cores.texto },
-  notaApuracao: { fontSize: 11, color: cores.textoFraco, marginTop: espaco.xs, lineHeight: 16 },
+  opcaoTexto: { flex: 1, fontSize: 16, color: cores.texto },
+  notaApuracao: { fontSize: 13, color: cores.textoFraco, marginTop: espaco.xs, lineHeight: 18 },
   opcaoTextoAtiva: { fontWeight: '700' },
-  opcaoContagem: { fontSize: 13, color: cores.textoFraco, fontWeight: '600' },
+  opcaoContagem: { fontSize: 15, color: cores.textoFraco, fontWeight: '600' },
   opcaoContagemAtiva: { color: cores.primaria, fontWeight: '800' },
   trilho: { height: 6, borderRadius: 3, backgroundColor: cores.borda, overflow: 'hidden' },
   preenchimento: { height: '100%', borderRadius: 3, backgroundColor: cores.textoFraco },
@@ -742,6 +763,6 @@ const styles = StyleSheet.create({
     borderTopColor: cores.borda,
   },
   rodapeConfirmado: { backgroundColor: cores.primaria, borderTopColor: cores.primaria },
-  rodapeTexto: { fontSize: 16, fontWeight: '800', color: cores.primaria },
+  rodapeTexto: { fontSize: 18, fontWeight: '800', color: cores.primaria },
   rodapeTextoConfirmado: { color: cores.textoClaro },
 });

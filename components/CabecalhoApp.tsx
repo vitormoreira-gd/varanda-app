@@ -152,8 +152,8 @@ const styles = StyleSheet.create({
   },
   identidade: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: espaco.md },
   textos: { flex: 1 },
-  nome: { fontSize: 16, fontWeight: '800', color: cores.texto },
-  subtitulo: { fontSize: 12, color: cores.textoFraco, marginTop: 1 },
+  nome: { fontSize: 18, fontWeight: '800', color: cores.texto },
+  subtitulo: { fontSize: 14, color: cores.textoFraco, marginTop: 1 },
   pontinhos: { padding: espaco.xs },
 
   fundo: { flex: 1, backgroundColor: 'rgba(0,0,0,0.25)' },
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   menuTopo: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -187,10 +187,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: espaco.lg,
   },
   itemPressionado: { backgroundColor: cores.superficieAlt },
-  itemTexto: { flex: 1, fontSize: 14, color: cores.texto, fontWeight: '600' },
+  itemTexto: { flex: 1, fontSize: 16, color: cores.texto, fontWeight: '600' },
   itemInativo: { color: cores.textoFraco, fontWeight: '500' },
   emBreve: {
-    fontSize: 10,
+    fontSize: 12,
     color: cores.textoFraco,
     fontStyle: 'italic',
   },

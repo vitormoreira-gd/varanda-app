@@ -89,7 +89,7 @@ function AppLogado() {
             borderTopColor: cores.borda,
             paddingTop: 6,
           },
-          tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+          tabBarLabelStyle: { fontSize: 13, fontWeight: '600' },
           tabBarIcon: ({ focused, color, size }) => {
             const icone = ICONES[route.name];
             if (!icone) return null;

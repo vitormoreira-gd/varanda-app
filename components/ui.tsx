@@ -89,8 +89,8 @@ const b = StyleSheet.create({
   pequeno: { paddingVertical: 6, paddingHorizontal: espaco.md, minHeight: 34 },
   pressionado: { opacity: 0.75 },
   inativo: { opacity: 0.4 },
-  texto: { fontSize: 14, fontWeight: '700' },
-  textoPequeno: { fontSize: 12 },
+  texto: { fontSize: 16, fontWeight: '700' },
+  textoPequeno: { fontSize: 14 },
 });
 
 // ---------- LINK (ação textual, sem peso de botão) ----------
@@ -115,7 +115,7 @@ export function Link({
 }
 
 const l = StyleSheet.create({
-  texto: { fontSize: 13, fontWeight: '600' },
+  texto: { fontSize: 15, fontWeight: '600' },
 });
 
 // ---------- AVATAR ----------
@@ -226,7 +226,7 @@ export function Campo({
 
 const ca = StyleSheet.create({
   rotulo: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     color: cores.textoFraco,
     marginBottom: espaco.xs,
@@ -239,7 +239,7 @@ const ca = StyleSheet.create({
     paddingVertical: 10,
     backgroundColor: cores.superficie,
     color: cores.texto,
-    fontSize: 14,
+    fontSize: 16,
   },
   multiline: { minHeight: 72, textAlignVertical: 'top' },
 });
@@ -283,7 +283,7 @@ const ch = StyleSheet.create({
     backgroundColor: cores.superficie,
   },
   ativo: { backgroundColor: cores.primaria, borderColor: cores.primaria },
-  texto: { fontSize: 12, color: cores.textoFraco, fontWeight: '600' },
+  texto: { fontSize: 14, color: cores.textoFraco, fontWeight: '600' },
   textoAtivo: { color: cores.textoClaro },
 });
 
@@ -316,11 +316,13 @@ export function Etiqueta({ texto, tom = 'neutro' }: { texto: string; tom?: Tom }
 const e = StyleSheet.create({
   base: {
     borderRadius: raio.pill,
-    paddingVertical: 3,
-    paddingHorizontal: 9,
+    // Cresceu junto com o texto (10 -> 12): a pílula apertada em volta de
+    // letra maior lê como erro de layout, não como etiqueta.
+    paddingVertical: 4,
+    paddingHorizontal: 11,
     alignSelf: 'flex-start',
   },
-  texto: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.3 },
+  texto: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.3 },
 });
 
 // ---------- ESPAÇO DE TOPO ----------
@@ -395,7 +397,7 @@ const s = StyleSheet.create({
     backgroundColor: cores.superficie,
   },
   opcaoAtiva: { backgroundColor: cores.primaria, borderColor: cores.primaria },
-  texto: { fontSize: 13, color: cores.textoFraco, fontWeight: '600' },
+  texto: { fontSize: 15, color: cores.textoFraco, fontWeight: '600' },
   textoAtivo: { color: cores.textoClaro },
 });
 
@@ -419,7 +421,7 @@ const sc = StyleSheet.create({
     marginBottom: espaco.sm,
   },
   texto: {
-    fontSize: 12,
+    fontSize: 14,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     color: cores.textoFraco,
@@ -444,14 +446,14 @@ export function Vazio({ icone, titulo, texto }: { icone: string; titulo: string;
 
 const v = StyleSheet.create({
   base: { alignItems: 'center', paddingVertical: espaco.xxl, paddingHorizontal: espaco.xl },
-  icone: { fontSize: 30, marginBottom: espaco.sm },
-  titulo: { fontSize: 14, fontWeight: '700', color: cores.texto, textAlign: 'center' },
+  icone: { fontSize: 32, marginBottom: espaco.sm },
+  titulo: { fontSize: 16, fontWeight: '700', color: cores.texto, textAlign: 'center' },
   texto: {
-    fontSize: 13,
+    fontSize: 15,
     color: cores.textoFraco,
     textAlign: 'center',
     marginTop: espaco.xs,
-    lineHeight: 19,
+    lineHeight: 22,
   },
 });
 
@@ -474,7 +476,7 @@ const cg = StyleSheet.create({
     gap: espaco.md,
     backgroundColor: cores.fundo,
   },
-  texto: { fontSize: 13, color: cores.textoFraco },
+  texto: { fontSize: 15, color: cores.textoFraco },
 });
 
 // ---------- SUB-ABAS ----------
@@ -543,9 +545,9 @@ const sa = StyleSheet.create({
     justifyContent: 'center',
     gap: 3,
     paddingVertical: espaco.sm,
-    minHeight: 54,
+    minHeight: 60,
   },
-  texto: { fontSize: 11, fontWeight: '600', color: cores.textoFraco },
+  texto: { fontSize: 13, fontWeight: '600', color: cores.textoFraco },
   textoAtivo: { color: cores.primaria, fontWeight: '800' },
   // Sai fora da caixa do ícone de propósito: encostado nele, o número
   // competiria com o próprio desenho do ícone.
@@ -553,13 +555,13 @@ const sa = StyleSheet.create({
     position: 'absolute',
     top: -5,
     right: -11,
-    minWidth: 17,
-    height: 17,
-    borderRadius: 9,
+    minWidth: 21,
+    height: 21,
+    borderRadius: 11,
     paddingHorizontal: 4,
     backgroundColor: cores.perigo,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeTexto: { fontSize: 10, fontWeight: '800', color: cores.textoClaro },
+  badgeTexto: { fontSize: 12, fontWeight: '800', color: cores.textoClaro },
 });

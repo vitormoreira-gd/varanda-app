@@ -124,8 +124,8 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: cores.fundo },
   conteudo: { padding: espaco.xl, paddingBottom: espaco.xxl },
-  marca: { fontSize: 32, fontWeight: '800', color: cores.primaria, letterSpacing: -0.5 },
-  tagline: { fontSize: 14, color: cores.textoFraco, marginTop: espaco.xs },
+  marca: { fontSize: 34, fontWeight: '800', color: cores.primaria, letterSpacing: -0.5 },
+  tagline: { fontSize: 16, color: cores.textoFraco, marginTop: espaco.xs },
 
   demo: {
     marginTop: espaco.xxl,
@@ -134,13 +134,13 @@ const styles = StyleSheet.create({
     padding: espaco.lg,
   },
   demoTitulo: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     color: cores.primaria,
   },
-  demoTexto: { fontSize: 13, color: cores.textoFraco, marginTop: espaco.xs, lineHeight: 18 },
+  demoTexto: { fontSize: 15, color: cores.textoFraco, marginTop: espaco.xs, lineHeight: 21 },
   demoLista: { marginTop: espaco.md, gap: espaco.sm },
   demoBotao: {
     flexDirection: 'row',
@@ -151,14 +151,14 @@ const styles = StyleSheet.create({
     paddingVertical: espaco.md,
     paddingHorizontal: espaco.md,
   },
-  demoIcone: { fontSize: 20 },
-  demoRotulo: { fontSize: 14, fontWeight: '700', color: cores.texto },
-  demoResumo: { fontSize: 12, color: cores.textoFraco, marginTop: 1 },
-  demoSeta: { fontSize: 22, color: cores.textoFraco },
+  demoIcone: { fontSize: 22 },
+  demoRotulo: { fontSize: 16, fontWeight: '700', color: cores.texto },
+  demoResumo: { fontSize: 14, color: cores.textoFraco, marginTop: 1 },
+  demoSeta: { fontSize: 25, color: cores.textoFraco },
 
   divisor: {
     textAlign: 'center',
-    fontSize: 12,
+    fontSize: 14,
     color: cores.textoFraco,
     marginTop: espaco.xl,
   },

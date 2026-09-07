@@ -10,7 +10,9 @@
 #
 # O que funciona é registrar as variáveis no próprio EAS:
 #
-#   eas env:set --name EXPO_PUBLIC_SUPABASE_URL --value <...> #     --environment preview --visibility plaintext --scope project #     --type string --non-interactive
+#   eas env:set --name EXPO_PUBLIC_SUPABASE_URL --value <...>
+#     --environment preview --visibility plaintext
+#     --scope project --type string --non-interactive
 #
 # E a conferência está na primeira linha do output do `eas build`:
 #   "No environment variables ... found"   -> o APK vai sair quebrado

@@ -203,11 +203,11 @@ export default function ModerarScreen({ somenteLeitura = false }: { somenteLeitu
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: cores.fundo },
-  titulo: { fontWeight: '700', fontSize: 15, color: cores.texto },
-  meta: { fontSize: 12, color: cores.textoFraco, marginTop: 2 },
+  titulo: { fontWeight: '700', fontSize: 17, color: cores.texto },
+  meta: { fontSize: 14, color: cores.textoFraco, marginTop: 2 },
   privado: { marginTop: espaco.sm, alignSelf: 'flex-start' },
   rotulo: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.4,

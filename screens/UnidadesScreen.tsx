@@ -233,14 +233,14 @@ export default function UnidadesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: cores.fundo, paddingHorizontal: espaco.lg },
-  formTitulo: { fontSize: 15, fontWeight: '700', color: cores.texto },
-  formDica: { fontSize: 12, color: cores.textoFraco, marginTop: espaco.xs, marginBottom: espaco.md },
+  formTitulo: { fontSize: 17, fontWeight: '700', color: cores.texto },
+  formDica: { fontSize: 14, color: cores.textoFraco, marginTop: espaco.xs, marginBottom: espaco.md },
   linha: { flexDirection: 'row', gap: espaco.sm },
   cardLinha: { flexDirection: 'row', alignItems: 'center', gap: espaco.md },
-  unidade: { fontSize: 15, fontWeight: '800', color: cores.texto },
-  moradores: { fontSize: 12, color: cores.textoFraco, marginTop: 2 },
+  unidade: { fontSize: 17, fontWeight: '800', color: cores.texto },
+  moradores: { fontSize: 14, color: cores.textoFraco, marginTop: 2 },
   codigo: {
-    fontSize: 13,
+    fontSize: 15,
     color: cores.primaria,
     fontFamily: 'monospace',
     letterSpacing: 1,

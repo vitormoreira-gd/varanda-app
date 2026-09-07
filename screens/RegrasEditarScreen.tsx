@@ -150,12 +150,12 @@ export default function RegrasEditarScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: cores.fundo, paddingHorizontal: espaco.lg },
-  meta: { fontSize: 12, color: cores.textoFraco },
+  meta: { fontSize: 14, color: cores.textoFraco },
   inputGrande: { minHeight: 240 },
   dica: {
-    fontSize: 11,
+    fontSize: 13,
     color: cores.textoFraco,
-    lineHeight: 16,
+    lineHeight: 18,
     marginTop: espaco.md,
     marginBottom: espaco.lg,
   },

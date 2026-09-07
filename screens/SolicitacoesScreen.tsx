@@ -221,7 +221,7 @@ function ModalNovaSolicitacao({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: cores.fundo },
   legenda: {
-    fontSize: 12,
+    fontSize: 14,
     color: cores.textoFraco,
     paddingHorizontal: espaco.lg,
     paddingTop: espaco.md,
@@ -253,9 +253,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: cores.borda,
   },
-  topoTitulo: { fontSize: 16, fontWeight: '800', color: cores.texto },
+  topoTitulo: { fontSize: 18, fontWeight: '800', color: cores.texto },
   corpo: { padding: espaco.lg, paddingBottom: espaco.xxl },
-  pergunta: { fontSize: 18, fontWeight: '800', color: cores.texto },
+  pergunta: { fontSize: 20, fontWeight: '800', color: cores.texto },
 
   tipo: {
     flexDirection: 'row',
@@ -277,8 +277,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tipoIconeEmBreve: { backgroundColor: cores.borda },
-  tipoRotulo: { fontSize: 15, fontWeight: '700', color: cores.texto },
+  tipoRotulo: { fontSize: 17, fontWeight: '700', color: cores.texto },
   tipoTextoFraco: { color: cores.textoFraco },
-  tipoResumo: { fontSize: 12, color: cores.textoFraco, marginTop: 1 },
-  emBreve: { fontSize: 10, color: cores.textoFraco, fontStyle: 'italic' },
+  tipoResumo: { fontSize: 14, color: cores.textoFraco, marginTop: 1 },
+  emBreve: { fontSize: 12, color: cores.textoFraco, fontStyle: 'italic' },
 });

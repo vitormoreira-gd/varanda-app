@@ -128,5 +128,5 @@ const styles = StyleSheet.create({
     ...sombra,
     elevation: 8,
   },
-  texto: { color: cores.textoClaro, fontSize: 14, fontWeight: '700' },
+  texto: { color: cores.textoClaro, fontSize: 16, fontWeight: '700' },
 });

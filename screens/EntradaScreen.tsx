@@ -275,12 +275,12 @@ function Pendente({ aoConcluir }: { aoConcluir: () => void }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: cores.fundo },
   conteudo: { paddingHorizontal: espaco.xl, paddingBottom: espaco.xxl },
-  marca: { fontSize: 28, fontWeight: '800', color: cores.primaria, letterSpacing: -0.5 },
-  passo: { fontSize: 12, color: cores.textoFraco, marginTop: espaco.xs },
-  subtitulo: { fontSize: 16, fontWeight: '700', color: cores.texto },
-  ajuda: { fontSize: 13, color: cores.textoFraco, marginTop: espaco.xs, lineHeight: 19 },
+  marca: { fontSize: 30, fontWeight: '800', color: cores.primaria, letterSpacing: -0.5 },
+  passo: { fontSize: 14, color: cores.textoFraco, marginTop: espaco.xs },
+  subtitulo: { fontSize: 18, fontWeight: '700', color: cores.texto },
+  ajuda: { fontSize: 15, color: cores.textoFraco, marginTop: espaco.xs, lineHeight: 22 },
   rotulo: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     color: cores.textoFraco,
     marginTop: espaco.md,

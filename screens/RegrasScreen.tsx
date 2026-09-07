@@ -98,10 +98,12 @@ export default function RegrasScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: cores.fundo },
+  // Documento se le sobre branco. O bege serve de fundo de lista, onde os
+  // cartoes brancos saltam dele; aqui nao ha cartao, ha paragrafo.
+  container: { flex: 1, backgroundColor: cores.superficie },
   conteudo: { paddingHorizontal: espaco.xl, paddingTop: espaco.lg, paddingBottom: espaco.xxl },
-  titulo: { fontSize: 20, fontWeight: '800', color: cores.texto },
-  meta: { fontSize: 12, color: cores.textoFraco, marginTop: espaco.xs },
+  titulo: { fontSize: 22, fontWeight: '800', color: cores.texto },
+  meta: { fontSize: 14, color: cores.textoFraco, marginTop: espaco.xs },
   regua: {
     height: 1,
     backgroundColor: cores.borda,
@@ -110,5 +112,5 @@ const styles = StyleSheet.create({
   },
   // Corpo de documento: um pouco maior e bem mais arejado que o texto de
   // card, porque aqui a pessoa lê parágrafos e não varre uma lista.
-  texto: { fontSize: 16, color: cores.texto, lineHeight: 26 },
+  texto: { fontSize: 18, color: cores.texto, lineHeight: 30 },
 });

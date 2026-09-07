@@ -159,13 +159,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: espaco.xs,
     marginBottom: espaco.md,
   },
-  mes: { fontSize: 15, fontWeight: '800', color: cores.texto, textTransform: 'capitalize' },
+  mes: { fontSize: 17, fontWeight: '800', color: cores.texto, textTransform: 'capitalize' },
 
   semana: { flexDirection: 'row' },
   diaSemana: {
     flexBasis: '14.2857%',
     textAlign: 'center',
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
     color: cores.textoFraco,
     marginBottom: espaco.xs,
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
   },
   diaEscolhido: { backgroundColor: cores.primaria },
   diaOcupado: { backgroundColor: cores.perigoFundo },
-  diaTexto: { fontSize: 14, color: cores.texto, fontWeight: '600' },
+  diaTexto: { fontSize: 16, color: cores.texto, fontWeight: '600' },
   diaTextoEscolhido: { color: cores.textoClaro, fontWeight: '800' },
   diaTextoBloqueado: { color: cores.textoFraco, opacity: 0.5 },
   diaTextoOcupado: {
@@ -197,5 +197,5 @@ const styles = StyleSheet.create({
     marginTop: espaco.md,
   },
   pontinho: { width: 12, height: 12, borderRadius: 3 },
-  legendaTexto: { fontSize: 11, color: cores.textoFraco },
+  legendaTexto: { fontSize: 13, color: cores.textoFraco },
 });

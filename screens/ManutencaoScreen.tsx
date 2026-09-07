@@ -9,13 +9,24 @@
 // FK de `historico_status` e o seed, sem ganho nenhum.
 
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Alert, RefreshControl } from 'react-native';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  Alert,
+  RefreshControl,
+  Pressable,
+  ScrollView,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { useMeuCondominio } from '../lib/useMeuCondominio';
 import { diasDesde, emDias } from '../lib/datas';
 import { cores, espaco } from '../lib/tema';
 import { Botao, Campo, Cartao, Chip, Etiqueta, Seletor, Tom, Vazio, corDoTom } from '../components/ui';
 import { useAvisoRapido } from '../components/AvisoRapido';
+import FolhaExpandida from '../components/FolhaExpandida';
 
 const CATEGORIAS = ['Hidráulica', 'Elétrica', 'Estrutural', 'Limpeza', 'Segurança'];
 
@@ -87,6 +98,7 @@ export default function ManutencaoScreen({ atualizacao }: { atualizacao?: number
   const { condominioId } = useMeuCondominio();
   const [lista, setLista] = useState<Manutencao[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [abertoId, setAbertoId] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     const { data, error } = await supabase
@@ -116,6 +128,8 @@ export default function ManutencaoScreen({ atualizacao }: { atualizacao?: number
     setRefreshing(false);
   }
 
+  const aberto = lista.find((p) => p.id === abertoId) ?? null;
+
   return (
     <FlatList
       style={styles.container}
@@ -133,6 +147,7 @@ export default function ManutencaoScreen({ atualizacao }: { atualizacao?: number
       renderItem={({ item }) => {
         const sla = tempoEmAberto(item);
         return (
+          <Pressable onPress={() => setAbertoId(item.id)}>
           <Cartao>
             <View style={styles.cardTop}>
               <View style={{ flex: 1 }}>
@@ -158,12 +173,57 @@ export default function ManutencaoScreen({ atualizacao }: { atualizacao?: number
               </View>
             )}
 
-            <Text style={[styles.sla, { color: corDoTom(sla.tom) }]}>{sla.texto}</Text>
-            <Text style={styles.descricao}>{item.descricao}</Text>
+            {/* A descrição saiu do card e foi pra folha. Numa lista de dez
+                pedidos, dez parágrafos empilhados viram um paredão: o que
+                se quer varrer aqui é o QUE e o HÁ QUANTO TEMPO. O texto
+                inteiro está a um toque. */}
+            <View style={styles.rodapeCard}>
+              <Text style={[styles.sla, { color: corDoTom(sla.tom) }]}>{sla.texto}</Text>
+              <Ionicons name="chevron-forward" size={22} color={cores.textoFraco} />
+            </View>
           </Cartao>
+          </Pressable>
         );
       }}
+      ListFooterComponent={
+        aberto ? <FolhaPedido item={aberto} aoFechar={() => setAbertoId(null)} /> : null
+      }
     />
+  );
+}
+
+// ---------- FOLHA DO PEDIDO ----------
+// Mesmo formato do Oficial e do Mural: meia tela, alcinha, tipografia de
+// leitura. Aqui é onde a descrição inteira mora.
+
+function FolhaPedido({ item, aoFechar }: { item: Manutencao; aoFechar: () => void }) {
+  const sla = tempoEmAberto(item);
+  return (
+    <FolhaExpandida aoFechar={aoFechar}>
+      {({ propsRolagem, arrasto }) => (
+        <View style={{ flex: 1 }} {...arrasto}>
+          <ScrollView {...propsRolagem} contentContainerStyle={styles.folhaConteudo}>
+            <View style={styles.folhaEtiquetas}>
+              <Etiqueta
+                texto={STATUS_LABEL[item.status] ?? item.status}
+                tom={STATUS_TOM[item.status] ?? 'neutro'}
+              />
+              {!item.area_comum && <Etiqueta texto="Só na unidade" tom="info" />}
+            </View>
+
+            <Text style={styles.folhaTitulo}>{item.titulo}</Text>
+            <Text style={styles.folhaMeta}>
+              {[item.categoria, item.local].filter(Boolean).join(' · ')}
+            </Text>
+            <Text style={[styles.folhaSla, { color: corDoTom(sla.tom) }]}>{sla.texto}</Text>
+
+            <View style={styles.folhaRegua} />
+
+            <Text style={styles.folhaTexto}>{item.descricao}</Text>
+          </ScrollView>
+        </View>
+      )}
+    </FolhaExpandida>
   );
 }
 
@@ -272,7 +332,7 @@ export function FormularioManutencao({ aoConcluir }: { aoConcluir: () => void })
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: cores.fundo, paddingHorizontal: espaco.lg },
   rotulo: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     color: cores.textoFraco,
     marginTop: espaco.md,
@@ -285,15 +345,46 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: espaco.sm,
   },
-  titulo: { fontWeight: '700', fontSize: 15, color: cores.texto },
-  meta: { fontSize: 12, color: cores.textoFraco, marginTop: 2 },
-  sla: { fontSize: 11, fontWeight: '700', marginTop: espaco.sm },
+  titulo: { fontWeight: '700', fontSize: 17, color: cores.texto },
+  meta: { fontSize: 14, color: cores.textoFraco, marginTop: 2 },
+  sla: { fontSize: 13, fontWeight: '700', marginTop: espaco.sm },
   privado: { marginTop: espaco.sm, alignSelf: 'flex-start' },
   dicaAlcance: {
-    fontSize: 11,
+    fontSize: 13,
     color: cores.textoFraco,
-    lineHeight: 16,
+    lineHeight: 18,
     marginTop: espaco.sm,
   },
-  descricao: { fontSize: 13, color: cores.textoFraco, marginTop: espaco.sm, lineHeight: 19 },
+  descricao: { fontSize: 15, color: cores.textoFraco, marginTop: espaco.sm, lineHeight: 22 },
+
+  rodapeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: espaco.sm,
+  },
+
+  // Aberto é pra ler, não pra varrer — mesma tipografia do Oficial.
+  folhaConteudo: {
+    paddingHorizontal: espaco.xl,
+    paddingTop: espaco.md,
+    paddingBottom: espaco.xxl,
+  },
+  folhaEtiquetas: { flexDirection: 'row', flexWrap: 'wrap', gap: espaco.sm },
+  folhaTitulo: {
+    fontSize: 25,
+    fontWeight: '800',
+    color: cores.texto,
+    lineHeight: 32,
+    marginTop: espaco.md,
+  },
+  folhaMeta: { fontSize: 15, color: cores.textoFraco, marginTop: espaco.xs },
+  folhaSla: { fontSize: 15, fontWeight: '700', marginTop: espaco.sm },
+  folhaRegua: {
+    height: 1,
+    backgroundColor: cores.borda,
+    marginTop: espaco.lg,
+    marginBottom: espaco.lg,
+  },
+  folhaTexto: { fontSize: 19, color: cores.texto, lineHeight: 30 },
 });

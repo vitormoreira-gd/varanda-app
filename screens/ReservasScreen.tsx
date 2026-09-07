@@ -364,15 +364,15 @@ export function FormularioSalao({ aoConcluir }: { aoConcluir: () => void }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: cores.fundo, paddingHorizontal: espaco.lg },
   rotulo: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     color: cores.textoFraco,
     marginBottom: espaco.xs,
   },
   aviso: {
-    fontSize: 11,
+    fontSize: 13,
     color: cores.textoFraco,
-    lineHeight: 16,
+    lineHeight: 18,
     marginTop: espaco.md,
   },
   cardTop: {
@@ -381,8 +381,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: espaco.sm,
   },
-  data: { fontSize: 15, fontWeight: '700', color: cores.texto },
-  quem: { fontSize: 12, color: cores.textoFraco, marginTop: 2 },
-  observacao: { fontSize: 13, color: cores.textoFraco, marginTop: espaco.sm },
+  data: { fontSize: 17, fontWeight: '700', color: cores.texto },
+  quem: { fontSize: 14, color: cores.textoFraco, marginTop: 2 },
+  observacao: { fontSize: 15, color: cores.textoFraco, marginTop: espaco.sm },
   acoes: { flexDirection: 'row', gap: espaco.sm, marginTop: espaco.md },
 });

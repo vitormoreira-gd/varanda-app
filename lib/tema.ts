@@ -50,12 +50,12 @@ export const raio = {
 } as const;
 
 export const fonte = {
-  titulo: { fontSize: 22, fontWeight: '800' },
-  cardTitulo: { fontSize: 15, fontWeight: '700' },
-  corpo: { fontSize: 14 },
-  corpoPequeno: { fontSize: 13 },
-  meta: { fontSize: 12 },
-  etiqueta: { fontSize: 10, fontWeight: '700' },
+  titulo: { fontSize: 25, fontWeight: '800' },
+  cardTitulo: { fontSize: 17, fontWeight: '700' },
+  corpo: { fontSize: 16 },
+  corpoPequeno: { fontSize: 15 },
+  meta: { fontSize: 14 },
+  etiqueta: { fontSize: 12, fontWeight: '700' },
 } as const;
 
 // Sombra discreta e uniforme. No Android só `elevation` tem efeito; no iOS só
