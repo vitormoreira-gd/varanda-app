@@ -487,7 +487,14 @@ export function SubAbas<T extends string>({
   valor,
   aoTrocar,
 }: {
-  opcoes: readonly { chave: T; label: string; icone: keyof typeof Ionicons.glyphMap }[];
+  opcoes: readonly {
+    chave: T;
+    label: string;
+    icone: keyof typeof Ionicons.glyphMap;
+    // Contador opcional desenhado sobre o ícone (ex: vínculos esperando
+    // aprovação). Zero e undefined não desenham nada: badge vazio é sujeira.
+    badge?: number;
+  }[];
   valor: T;
   aoTrocar: (chave: T) => void;
 }) {
@@ -501,11 +508,20 @@ export function SubAbas<T extends string>({
             onPress={() => aoTrocar(o.chave)}
             style={({ pressed }) => [sa.item, pressed && { opacity: 0.6 }]}
           >
-            <Ionicons
-              name={o.icone}
-              size={22}
-              color={ativo ? cores.primaria : cores.textoFraco}
-            />
+            <View>
+              <Ionicons
+                name={o.icone}
+                size={22}
+                color={ativo ? cores.primaria : cores.textoFraco}
+              />
+              {!!o.badge && (
+                <View style={sa.badge}>
+                  <Text style={sa.badgeTexto}>
+                    {o.badge > 9 ? '9+' : String(o.badge)}
+                  </Text>
+                </View>
+              )}
+            </View>
             <Text style={[sa.texto, ativo && sa.textoAtivo]}>{o.label}</Text>
           </Pressable>
         );
@@ -531,4 +547,19 @@ const sa = StyleSheet.create({
   },
   texto: { fontSize: 11, fontWeight: '600', color: cores.textoFraco },
   textoAtivo: { color: cores.primaria, fontWeight: '800' },
+  // Sai fora da caixa do ícone de propósito: encostado nele, o número
+  // competiria com o próprio desenho do ícone.
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -11,
+    minWidth: 17,
+    height: 17,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: cores.perigo,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeTexto: { fontSize: 10, fontWeight: '800', color: cores.textoClaro },
 });

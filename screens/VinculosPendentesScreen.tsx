@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, Alert, RefreshControl } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { cores, espaco } from '../lib/tema';
@@ -11,9 +11,20 @@ type Vinculo = {
   usuarios: { nome: string } | null;
 };
 
-export default function VinculosPendentesScreen() {
+// `aoContar` existe pro badge da barra de sub-abas em Gestao: quem ja faz a
+// consulta e esta tela, entao ela devolve o numero em vez de o host repetir a
+// mesma pergunta ao banco. Vive num ref, e nao nas dependencias do
+// `carregar`, porque um pai que passasse uma arrow inline recriaria o
+// callback a cada render e o efeito entraria em laco.
+export default function VinculosPendentesScreen({
+  aoContar,
+}: {
+  aoContar?: (quantidade: number) => void;
+}) {
   const [lista, setLista] = useState<Vinculo[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const aoContarRef = useRef(aoContar);
+  aoContarRef.current = aoContar;
 
   const carregar = useCallback(async () => {
     const { data, error } = await supabase
@@ -25,7 +36,9 @@ export default function VinculosPendentesScreen() {
       Alert.alert('Erro ao carregar vínculos', error.message);
       return;
     }
-    setLista((data as unknown as Vinculo[]) ?? []);
+    const pendentes = (data as unknown as Vinculo[]) ?? [];
+    setLista(pendentes);
+    aoContarRef.current?.(pendentes.length);
   }, []);
 
   useEffect(() => {
