@@ -231,16 +231,18 @@ const styles = StyleSheet.create({
   barra: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: espaco.md,
-    paddingBottom: espaco.sm,
-    minHeight: 34,
+    paddingTop: espaco.lg,
+    paddingBottom: espaco.md,
+    minHeight: 40,
   },
   barraPressionada: { backgroundColor: cores.superficieAlt },
   // A alcinha que todo mundo já sabe que se puxa pra baixo.
+  // Escura e curta. Em cinza-borda ela quase sumia sobre o branco da folha,
+   // e é ela que anuncia o gesto de arrastar pra fechar.
   pegador: {
-    width: 44,
-    height: 5,
+    width: 52,
+    height: 6,
     borderRadius: 3,
-    backgroundColor: cores.borda,
+    backgroundColor: cores.texto,
   },
 });

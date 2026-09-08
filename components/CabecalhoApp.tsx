@@ -50,7 +50,7 @@ export default function CabecalhoApp() {
           hitSlop={12}
           style={({ pressed }) => [styles.pontinhos, pressed && { opacity: 0.5 }]}
         >
-          <Ionicons name="ellipsis-vertical" size={20} color={cores.textoFraco} />
+          <Ionicons name="ellipsis-vertical" size={22} color={cores.texto} />
         </Pressable>
       </View>
 
@@ -140,20 +140,24 @@ function MenuOpcoes({
 }
 
 const styles = StyleSheet.create({
+  // A barra do topo é a única superfície laranja do app. Ela ancora a
+  // identidade e, por ser a mesma em todas as abas, dá a sensação de um app
+  // só em vez de quatro telas soltas. Sem borda inferior: a mudança de cor
+  // pro cinza do conteúdo já é a separação.
   barra: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: espaco.md,
     paddingHorizontal: espaco.lg,
-    paddingBottom: espaco.md,
-    backgroundColor: cores.superficie,
-    borderBottomWidth: 1,
-    borderBottomColor: cores.borda,
+    paddingBottom: espaco.lg,
+    backgroundColor: cores.primaria,
   },
   identidade: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: espaco.md },
   textos: { flex: 1 },
+  // Texto escuro sobre o laranja, não branco: o laranja é claro demais
+  // pra sustentar branco com contraste de leitura.
   nome: { fontSize: 18, fontWeight: '800', color: cores.texto },
-  subtitulo: { fontSize: 14, color: cores.textoFraco, marginTop: 1 },
+  subtitulo: { fontSize: 14, color: cores.texto, opacity: 0.75, marginTop: 1 },
   pontinhos: { padding: espaco.xs },
 
   fundo: { flex: 1, backgroundColor: 'rgba(0,0,0,0.25)' },

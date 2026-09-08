@@ -67,7 +67,14 @@ type Reuniao = {
 // se afastando com o tempo.
 type ItemOficial = {
   id: string;
+  /** Faixa lateral. Só o aviso fixado tem — é o que faz "fixado" significar
+   *  alguma coisa. Se restrito, cancelado e vencido também tivessem faixa,
+   *  metade da lista teria faixa e nenhuma delas destacaria. */
   destaque?: string;
+  /** Ícone colorido antes do título, no lugar das etiquetas em pílula. Uma
+   *  pílula escrita "fixado" ocupa uma linha inteira pra dizer o que o
+   *  alfinete já diz. */
+  icone?: string;
   etiquetas?: ReactNode;
   titulo: string;
   tituloRiscado?: boolean;
@@ -93,8 +100,6 @@ type ItemOficial = {
   /** Fixado vai pro topo, acima de qualquer data. */
   fixado?: boolean;
 };
-
-const SELO_RESTRITO = <Etiqueta texto="🔒 restrito ao gabinete" tom="restrito" />;
 
 export default function OficialScreen() {
   const { unidadeId, podeFiscalizar, loading: carregandoVinculo, erro: erroVinculo } =
@@ -340,17 +345,13 @@ export default function OficialScreen() {
 
     return {
       id: a.id,
-      // Restrito manda na cor da borda; fixado é sempre público, porque
-      // restrito e fixado não coexistem (check constraint no banco).
-      destaque: a.restrito ? cores.restrito : a.fixado ? cores.atencao : undefined,
-      etiquetas: (
-        <>
-          {a.restrito && SELO_RESTRITO}
-          {a.fixado && <Etiqueta texto="📌 fixado" tom="atencao" />}
-          {r && <Etiqueta texto="📅 tem reunião" tom="info" />}
-          {v && <Etiqueta texto="🗳️ tem votação" tom="info" />}
-        </>
-      ),
+      // A faixa lateral é exclusiva do fixado. Restrito, reunião e votação se
+      // anunciam pelo ícone: se cada um deles ganhasse faixa, metade da lista
+      // teria faixa e o destaque deixaria de destacar.
+      destaque: a.fixado ? cores.primaria : undefined,
+      icone: [a.fixado && '📌', a.restrito && '🔒', r && '📅', v && '🗳️']
+        .filter(Boolean)
+        .join(' '),
       titulo: a.titulo,
       meta: formatarData(a.criado_em),
       texto: a.texto,
@@ -386,11 +387,9 @@ export default function OficialScreen() {
       const cancelada = !!r.cancelada_em;
       return {
         id: r.id,
-        destaque: r.restrito ? cores.restrito : cancelada ? cores.perigo : undefined,
+        icone: [r.restrito && '🔒', '📅'].filter(Boolean).join(' '),
         etiquetas: (
           <>
-            {r.restrito && SELO_RESTRITO}
-            <Etiqueta texto="📅 reunião" tom="info" />
             {cancelada && <Etiqueta texto="cancelada" tom="critico" />}
             {!cancelada && passada && <Etiqueta texto="já passou" tom="neutro" />}
           </>
@@ -411,13 +410,7 @@ export default function OficialScreen() {
     .filter((v) => !v.aviso_id)
     .map((v) => ({
       id: v.id,
-      destaque: v.restrito ? cores.restrito : undefined,
-      etiquetas: (
-        <>
-          {v.restrito && SELO_RESTRITO}
-          <Etiqueta texto="🗳️ votação" tom="info" />
-        </>
-      ),
+      icone: [v.restrito && '🔒', '🗳️'].filter(Boolean).join(' '),
       titulo: v.titulo,
       meta: `Encerra em ${formatarData(v.data_fim)}`,
       texto: v.descricao ?? '',
@@ -445,11 +438,11 @@ export default function OficialScreen() {
         onPress={() => setRegrasAbertas(true)}
         style={({ pressed }) => [styles.botaoRegras, pressed && { opacity: 0.6 }]}
       >
-        <Ionicons name="document-text-outline" size={20} color={cores.primaria} />
+        <Ionicons name="document-text-outline" size={22} color={cores.texto} />
         <Text style={styles.botaoRegrasTexto}>
           Regimento interno{versaoRegras ? ` · versão ${versaoRegras}` : ''}
         </Text>
-        <Ionicons name="chevron-forward" size={20} color={cores.textoFraco} />
+        <Ionicons name="chevron-forward" size={24} color={cores.texto} />
       </Pressable>
 
       <ScrollView
@@ -505,7 +498,7 @@ function CartaoResumo({ item, aoAbrir }: { item: ItemOficial; aoAbrir: () => voi
     <View
       style={[
         styles.card,
-        item.destaque ? { borderLeftWidth: 4, borderLeftColor: item.destaque } : null,
+        item.destaque ? { borderLeftWidth: 6, borderLeftColor: item.destaque } : null,
       ]}
     >
       <Pressable onPress={aoAbrir}>
@@ -513,16 +506,25 @@ function CartaoResumo({ item, aoAbrir }: { item: ItemOficial; aoAbrir: () => voi
         <View style={styles.tituloLinha}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.titulo, item.tituloRiscado && styles.riscado]}>
+              {item.icone ? `${item.icone} ` : ''}
               {item.titulo}
             </Text>
             {item.meta ? <Text style={styles.meta}>{item.meta}</Text> : null}
           </View>
-          {temMais && (
-            <Ionicons name="chevron-forward" size={22} color={cores.textoFraco} />
-          )}
+          {/* Sem prévia, a seta é a única pista de que tocar leva a algum
+              lugar, e fica na linha do título. Com prévia ela desce pro pé
+              do card, ao lado do "Ler mais", que é onde a leitura termina. */}
+          {temMais && <Ionicons name="chevron-forward" size={24} color={cores.texto} />}
         </View>
+
         {comPrevia ? <Text style={styles.texto}>{visivel}</Text> : null}
-        {longo && <Text style={styles.lerMais}>Ler mais</Text>}
+
+        {comPrevia && (
+          <View style={styles.rodapeCard}>
+            <Text style={styles.lerMais}>{longo ? 'Ler mais' : 'Abrir'}</Text>
+            <Ionicons name="chevron-forward" size={24} color={cores.texto} />
+          </View>
+        )}
       </Pressable>
 
     </View>
@@ -542,6 +544,7 @@ function FolhaItem({ item, aoFechar }: { item: ItemOficial; aoFechar: () => void
             {item.etiquetas ? <View style={styles.etiquetas}>{item.etiquetas}</View> : null}
 
             <Text style={[styles.folhaTitulo, item.tituloRiscado && styles.riscado]}>
+              {item.icone ? `${item.icone} ` : ''}
               {item.titulo}
             </Text>
             {item.meta ? <Text style={styles.folhaMeta}>{item.meta}</Text> : null}
@@ -771,20 +774,21 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: cores.fundo },
   rolagem: { padding: espaco.md, paddingBottom: espaco.xl },
 
+  // Mesmo material dos cartões do feed — branco, arredondado, sombra macia —
+  // só que mais baixo. Ele pertence à lista, não é uma barra de ferramentas.
   botaoRegras: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: espaco.sm,
+    gap: espaco.md,
     marginHorizontal: espaco.md,
     marginTop: espaco.md,
-    paddingVertical: espaco.md,
-    paddingHorizontal: espaco.md,
+    paddingVertical: espaco.lg,
+    paddingHorizontal: espaco.xl,
     backgroundColor: cores.superficie,
-    borderRadius: raio.sm,
-    borderWidth: 1,
-    borderColor: cores.borda,
+    borderRadius: raio.md,
+    ...sombra,
   },
-  botaoRegrasTexto: { flex: 1, fontSize: 15, fontWeight: '700', color: cores.texto },
+  botaoRegrasTexto: { flex: 1, fontSize: 17, fontWeight: '700', color: cores.texto },
 
   regrasTopo: {
     flexDirection: 'row',
@@ -808,14 +812,22 @@ const styles = StyleSheet.create({
   linhaReuniaoTexto: { fontSize: 16, fontWeight: '700', color: cores.primaria },
   canceladaTexto: { fontSize: 14, color: cores.perigo, marginTop: espaco.xs },
 
+  // Sem borda: o branco sobre o cinza do fundo já se separa sozinho. E
+  // `overflow: hidden` é o que faz a faixa lateral do fixado acompanhar o
+  // arredondado em vez de cortar o canto em ângulo reto.
   card: {
     backgroundColor: cores.superficie,
     borderRadius: raio.md,
-    padding: espaco.lg,
+    padding: espaco.xl,
     marginBottom: espaco.md,
-    borderWidth: 1,
-    borderColor: cores.borda,
+    overflow: 'hidden',
     ...sombra,
+  },
+  rodapeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: espaco.lg,
   },
   etiquetas: { flexDirection: 'row', flexWrap: 'wrap', gap: espaco.sm, marginBottom: espaco.sm },
   tituloLinha: { flexDirection: 'row', alignItems: 'center', gap: espaco.sm },
@@ -823,7 +835,7 @@ const styles = StyleSheet.create({
   riscado: { textDecorationLine: 'line-through', color: cores.textoFraco },
   meta: { fontSize: 14, color: cores.textoFraco, marginTop: espaco.xs },
   texto: { fontSize: 16, color: cores.textoFraco, marginTop: espaco.sm, lineHeight: 24 },
-  lerMais: { fontSize: 15, color: cores.primaria, fontWeight: '700', marginTop: espaco.xs },
+  lerMais: { fontSize: 16, color: cores.texto, fontWeight: '700' },
   acoes: { marginTop: espaco.md },
 
   // Aberto é pra ler, não pra varrer: título maior, corpo em 17/27, e mais

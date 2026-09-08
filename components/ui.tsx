@@ -69,9 +69,16 @@ export function Botao({
   );
 }
 
+// O texto do botão primário é ESCURO, não branco. O laranja é claro demais:
+// branco sobre ele dá cerca de 2:1 de contraste, abaixo de qualquer mínimo
+// legível — e o público desta fase é de gente de mais idade. Escuro sobre
+// laranja passa de 6:1, e é o mesmo tratamento da barra do topo.
+//
+// No secundário o rótulo também é escuro: laranja sobre branco tem o mesmo
+// problema em texto de 16px.
 const VARIANTES: Record<VarianteBotao, { fundo: string; borda: string; texto: string }> = {
-  primario: { fundo: cores.primaria, borda: cores.primaria, texto: cores.textoClaro },
-  secundario: { fundo: cores.superficie, borda: cores.borda, texto: cores.primaria },
+  primario: { fundo: cores.primaria, borda: cores.primaria, texto: cores.texto },
+  secundario: { fundo: cores.superficie, borda: cores.borda, texto: cores.texto },
   perigo: { fundo: cores.superficie, borda: cores.perigo, texto: cores.perigo },
   fantasma: { fundo: 'transparent', borda: 'transparent', texto: cores.textoFraco },
 };
@@ -197,10 +204,12 @@ const c = StyleSheet.create({
   card: {
     backgroundColor: cores.superficie,
     borderRadius: raio.md,
-    padding: espaco.lg,
+    padding: espaco.xl,
     marginBottom: espaco.md,
-    borderWidth: 1,
-    borderColor: cores.borda,
+    // Sem borda: com o fundo cinza, o branco do cartão já se separa sozinho.
+    // Borda mais sombra deixava cada cartão parecendo uma caixa de diálogo.
+    // `overflow: hidden` é o que faz a faixa lateral respeitar o arredondado.
+    overflow: 'hidden',
     ...sombra,
   },
 });
