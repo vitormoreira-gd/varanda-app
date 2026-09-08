@@ -157,7 +157,8 @@ declare
   pb_interfone uuid; pb_portao uuid; pb_piso uuid; pb_bomba uuid;
   pb_torneira uuid; pb_mofo uuid;
   vot_corrimao uuid; vot_elevador uuid;
-  reu_assembleia uuid;
+  reu_assembleia uuid; reu_conselho uuid;
+  av_corrimao uuid; av_assembleia uuid; av_restrito uuid;
 begin
   -- ---------- 1. localizar as contas de login ----------
   select id into helena  from auth.users where email = 'sindico@demo.varanda.app';
@@ -594,35 +595,56 @@ Não é luxo, é evitar quebrar o fêmur. Sei de dois casos de queda em escada s
     (v_cond, helena,
      'Regras do condomínio atualizadas',
      'Incluímos o prazo mínimo de 3 dias para reserva do salão, a prioridade no elevador para quem tem dificuldade de locomoção, e o horário de atendimento da zeladoria. A versão 2 já está no topo desta aba.',
-     false, false, now() - interval '26 days'),
+     false, false, now() - interval '26 days');
 
-    -- O aviso restrito. Na apresentação, é o que some quando você entra
-    -- como Morador — a prova de que a permissão é do banco, não da tela.
-    -- `fixado` obrigatoriamente false: há uma check constraint impedindo
-    -- restrito e fixado na mesma linha.
-    (v_cond, helena,
-     'Propostas de manutenção do elevador — analisar antes da assembleia',
-     'Chegaram três propostas para o contrato anual do elevador. A Ascende é a mais barata mas cobra visita avulsa fora do contrato; as outras duas incluem chamado ilimitado, com diferença de R$ 220/mês entre elas. Vamos fechar posição antes de levar à assembleia.',
-     false, true, now() - interval '1 day');
+  -- ---------- 10b. os avisos que CARREGAM reunião e votação ----------
+  -- Desde 07/09/2026 o aviso é o container: a votação e a assembleia moram
+  -- dentro do card dele. Estes três existem pra demonstração mostrar isso.
+
+  insert into avisos (condominio_id, autor_id, titulo, texto, fixado, restrito, criado_em)
+  values (v_cond, helena,
+    'Vamos instalar corrimão nos dois lados da escada',
+    'A dona Lourdes levantou isso no mural e tem razão: hoje só há apoio de um lado, e a escada é a única saída quando o elevador para. Levantei orçamento em alumínio: R$ 4.100, o que dá duas parcelas de R$ 49 por unidade. Abaixo, a votação. Quem preferir discutir pessoalmente, a assembleia de quinta tem isso na pauta.',
+    false, false, now() - interval '4 days')
+  returning id into av_corrimao;
+
+  insert into avisos (condominio_id, autor_id, titulo, texto, fixado, restrito, criado_em)
+  values (v_cond, helena,
+    'Assembleia ordinária — quinta, 19h, no salão',
+    'Pauta: prestação de contas do trimestre, resultado da votação do corrimão, contrato de manutenção do elevador, rateio da infiltração da garagem e assuntos gerais. Confirme presença aqui embaixo — assim eu já sei se teremos quórum e ninguém sobe escada à toa.',
+    false, false, now() - interval '9 days')
+  returning id into av_assembleia;
+
+  -- O aviso restrito, e o que mais importa na apresentação: ele carrega uma
+  -- votação E uma reunião. Quando você troca para Morador, o card inteiro
+  -- some -- aviso, votação e reunião de uma vez -- e é a prova de que a
+  -- permissão é do banco e não da tela. `fixado` obrigatoriamente false: há
+  -- uma check constraint impedindo restrito e fixado na mesma linha.
+  insert into avisos (condominio_id, autor_id, titulo, texto, fixado, restrito, criado_em)
+  values (v_cond, helena,
+    'Propostas de manutenção do elevador — analisar antes da assembleia',
+    'Chegaram três propostas para o contrato anual do elevador. A Ascende é a mais barata mas cobra visita avulsa fora do contrato; as outras duas incluem chamado ilimitado, com diferença de R$ 220/mês entre elas. Vamos fechar posição antes de levar à assembleia.',
+    false, true, now() - interval '1 day')
+  returning id into av_restrito;
 
   -- ---------- 11. votações ----------
-  insert into votacoes (condominio_id, autor_id, titulo, descricao, opcoes, restrito, data_inicio, data_fim)
+  insert into votacoes (condominio_id, autor_id, titulo, descricao, opcoes, restrito, data_inicio, data_fim, aviso_id)
   values (v_cond, helena,
     'Instalar corrimão nos dois lados da escada?',
     'Orçamento de R$ 4.100 em alumínio, rateado em duas parcelas de R$ 49 por unidade. Foi pedido em assembleia e voltou no Mural. A escada é a única saída quando o elevador para, e hoje só tem apoio de um lado.',
     array['Sim, aprovo', 'Não', 'Quero discutir na assembleia'],
-    false, now() - interval '4 days', now() + interval '3 days')
+    false, now() - interval '4 days', now() + interval '3 days', av_corrimao)
   returning id into vot_corrimao;
 
   -- A votação restrita, e o teste que mais importa: o morador comum não pode
   -- ver nem ela nem os votos dela. As policies de `votos` repetem a cláusula
   -- de restrito de propósito — filho não herda visibilidade do pai em RLS.
-  insert into votacoes (condominio_id, autor_id, titulo, descricao, opcoes, restrito, data_inicio, data_fim)
+  insert into votacoes (condominio_id, autor_id, titulo, descricao, opcoes, restrito, data_inicio, data_fim, aviso_id)
   values (v_cond, helena,
     'Qual proposta de elevador levar à assembleia?',
     'Posição do gabinete antes de apresentar as três propostas ao prédio.',
     array['Ascende (mais barata)', 'Elevatec (chamado ilimitado)', 'Renovar com a atual'],
-    true, now() - interval '1 day', now() + interval '4 days')
+    true, now() - interval '1 day', now() + interval '4 days', av_restrito)
   returning id into vot_elevador;
 
   -- Voto é por unidade, não por pessoa. 17 das 28 unidades já votaram: é
@@ -652,21 +674,25 @@ Não é luxo, é evitar quebrar o fêmur. Sei de dois casos de queda em escada s
     (vot_elevador, demo_unidade(v_cond, '301'), demo_uid('benedito@demo.varanda.app'), 'Renovar com a atual', now() - interval '14 hours');
 
   -- ---------- 12. reuniões ----------
-  insert into reunioes (condominio_id, autor_id, titulo, data_hora, local, pauta, restrito, criado_em)
+  insert into reunioes (condominio_id, autor_id, titulo, data_hora, local, pauta, restrito, criado_em, aviso_id)
   values (v_cond, helena, 'Assembleia ordinária',
     hora_local(4, '19:00'),
     'Salão de festas',
     'Prestação de contas do trimestre · resultado da votação do corrimão · contrato de manutenção do elevador · rateio da infiltração da garagem · assuntos gerais.',
-    false, now() - interval '9 days')
+    false, now() - interval '9 days', av_assembleia)
   returning id into reu_assembleia;
 
-  insert into reunioes (condominio_id, autor_id, titulo, data_hora, local, pauta, restrito, criado_em) values
-    (v_cond, helena, 'Conselho: fechar posição sobre o elevador',
-     hora_local(2, '20:00'),
-     'Salão de festas',
-     'Comparar as três propostas e escolher qual levar à assembleia.',
-     true, now() - interval '1 day'),
+  insert into reunioes (condominio_id, autor_id, titulo, data_hora, local, pauta, restrito, criado_em, aviso_id)
+  values (v_cond, helena, 'Conselho: fechar posição sobre o elevador',
+    hora_local(2, '20:00'),
+    'Salão de festas',
+    'Comparar as três propostas e escolher qual levar à assembleia.',
+    true, now() - interval '1 day', av_restrito)
+  returning id into reu_conselho;
 
+  -- Esta fica SEM aviso, de propósito: reunião avulsa continua existindo, e
+  -- é o que prova que as linhas antigas não sumiram do feed.
+  insert into reunioes (condominio_id, autor_id, titulo, data_hora, local, pauta, restrito, criado_em) values
     (v_cond, helena, 'Conversa sobre a pintura da fachada',
      hora_local(11, '19:30'),
      'Salão de festas', 'Orçamentos de pintura e prazo de execução.',
@@ -712,7 +738,7 @@ Não é luxo, é evitar quebrar o fêmur. Sei de dois casos de queda em escada s
     (v_cond, demo_unidade(v_cond, '705'), demo_uid('celio@demo.varanda.app'),
      data_local(30), 'Reunião da associação de aposentados do bairro', 'pendente', now() - interval '6 hours');
 
-  raise notice 'Seed aplicado. Edificio Alvorada: 42 unidades, 28 ocupadas (67%%), 32 pessoas, 2 vinculos pendentes.';
+  raise notice 'Seed aplicado. Edificio Alvorada: 42 unidades, 28 ocupadas (67%%), 32 pessoas, 2 vinculos pendentes, 3 avisos com reuniao/votacao dentro.';
 end $$;
 
 -- Os auxiliares existem só durante o seed. Deixá-los no banco criaria

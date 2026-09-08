@@ -281,6 +281,53 @@ create table if not exists rsvps (
   primary key (reuniao_id, usuario_id)
 );
 
+-- ---------- AVISO COMO CONTAINER ----------
+-- Reuniao e votacao quase nunca nascem sozinhas: elas sao consequencia de um
+-- aviso. "Vamos trocar o corrimao" e o aviso; a votacao do orcamento e a
+-- assembleia que decide sao desdobramentos. Penduradas nele, viram um card
+-- so -- texto em cima, botao de presenca e enquete embaixo.
+--
+-- A coluna e NULA de proposito: reuniao e votacao continuam podendo existir
+-- sozinhas, o que mantem as linhas antigas funcionando e deixa o sindico
+-- marcar uma reuniao avulsa sem inventar um aviso pra ela.
+alter table reunioes
+  add column if not exists aviso_id uuid references avisos(id) on delete cascade;
+
+alter table votacoes
+  add column if not exists aviso_id uuid references avisos(id) on delete cascade;
+
+create index if not exists reunioes_por_aviso on reunioes (aviso_id) where aviso_id is not null;
+create index if not exists votacoes_por_aviso on votacoes (aviso_id) where aviso_id is not null;
+
+-- O RESTRITO DO PAI MANDA NO FILHO. Armadilha nº8 de novo: as tres tabelas
+-- tem `restrito` proprio e policy propria. Um aviso restrito com votacao
+-- nao-restrita penduraria a votacao solta no feed do morador -- com o titulo
+-- contando o que o aviso escondia, e os votos legiveis junto. Garantir isso
+-- na tela seria lembrar em dois lugares hoje e esquecer no terceiro amanha.
+create or replace function herdar_restrito_do_aviso()
+returns trigger
+language plpgsql
+as $fn$
+begin
+  if new.aviso_id is not null then
+    select a.restrito into new.restrito
+    from avisos a
+    where a.id = new.aviso_id;
+  end if;
+  return new;
+end
+$fn$;
+
+drop trigger if exists reuniao_herda_restrito on reunioes;
+create trigger reuniao_herda_restrito
+  before insert or update of aviso_id, restrito on reunioes
+  for each row execute function herdar_restrito_do_aviso();
+
+drop trigger if exists votacao_herda_restrito on votacoes;
+create trigger votacao_herda_restrito
+  before insert or update of aviso_id, restrito on votacoes
+  for each row execute function herdar_restrito_do_aviso();
+
 -- ---------- RESERVA DO SALÃO ----------
 -- Um salão por condomínio, reservado por dia inteiro. Se um dia existirem
 -- várias áreas comuns (salão, churrasqueira, quadra), isso vira uma tabela

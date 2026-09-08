@@ -65,177 +65,6 @@ function Checkbox({
   );
 }
 
-export function CriarAvisoForm() {
-  const { condominioId } = useMeuCondominio();
-  const [titulo, setTitulo] = useState('');
-  const [texto, setTexto] = useState('');
-  const [fixado, setFixado] = useState(true);
-  const [restrito, setRestrito] = useState(false);
-
-  async function enviar() {
-    if (!titulo.trim() || !texto.trim() || !condominioId) return;
-    const { data: userData } = await supabase.auth.getUser();
-
-    const { error } = await supabase.from('avisos').insert({
-      titulo: titulo.trim(),
-      texto: texto.trim(),
-      fixado,
-      restrito,
-      condominio_id: condominioId,
-      autor_id: userData.user?.id,
-    });
-
-    if (error) {
-      Alert.alert('Erro ao criar aviso', error.message);
-      return;
-    }
-    setTitulo('');
-    setTexto('');
-    Alert.alert('Aviso publicado');
-  }
-
-  return (
-    <Cartao>
-      <Campo rotulo="Título" placeholder="Ex: Manutenção do elevador" value={titulo} onChangeText={setTitulo} />
-      <Campo
-        rotulo="Texto do aviso"
-        placeholder="O que os moradores precisam saber"
-        value={texto}
-        onChangeText={setTexto}
-        multiline
-        estilo={{ marginTop: espaco.md }}
-      />
-      <Checkbox
-        marcado={fixado}
-        onPress={() => setFixado(!fixado)}
-        rotulo="📌 Fixar no topo do Oficial"
-        desabilitado={restrito}
-      />
-      {restrito ? (
-        <Text style={styles.notaFixar}>
-          Aviso restrito não pode ser fixado: o destaque do topo é do prédio inteiro, e a maioria
-          nem enxergaria este aviso.
-        </Text>
-      ) : fixado ? (
-        <Text style={styles.notaFixar}>
-          Só existe um aviso fixado por vez. Publicar este desafixa o atual.
-        </Text>
-      ) : null}
-
-      <RestritoCheckbox
-        restrito={restrito}
-        setRestrito={(v) => {
-          setRestrito(v);
-          // O banco tem um check impedindo os dois juntos; desmarcar aqui
-          // evita o insert falhar com mensagem de constraint.
-          if (v) setFixado(false);
-        }}
-        oQue="este aviso"
-      />
-      <Botao
-        titulo="Publicar aviso"
-        onPress={enviar}
-        disabled={!titulo.trim() || !texto.trim()}
-        estilo={{ marginTop: espaco.md }}
-      />
-    </Cartao>
-  );
-}
-
-export function CriarVotacaoForm() {
-  const { condominioId } = useMeuCondominio();
-  const [titulo, setTitulo] = useState('');
-  const [descricao, setDescricao] = useState('');
-  const [opcoes, setOpcoes] = useState(['Sim', 'Não']);
-  const [dias, setDias] = useState('7');
-  const [restrito, setRestrito] = useState(false);
-
-  function atualizarOpcao(i: number, valor: string) {
-    const novas = [...opcoes];
-    novas[i] = valor;
-    setOpcoes(novas);
-  }
-
-  function adicionarOpcao() {
-    setOpcoes([...opcoes, '']);
-  }
-
-  async function enviar() {
-    const opcoesValidas = opcoes.map((o) => o.trim()).filter(Boolean);
-    if (!titulo.trim() || opcoesValidas.length < 2 || !condominioId) {
-      Alert.alert('Preencha o título e pelo menos 2 opções.');
-      return;
-    }
-    const { data: userData } = await supabase.auth.getUser();
-    const dataFim = new Date();
-    dataFim.setDate(dataFim.getDate() + (parseInt(dias, 10) || 7));
-
-    const { error } = await supabase.from('votacoes').insert({
-      titulo: titulo.trim(),
-      descricao: descricao.trim() || null,
-      opcoes: opcoesValidas,
-      data_fim: dataFim.toISOString(),
-      restrito,
-      condominio_id: condominioId,
-      autor_id: userData.user?.id,
-    });
-
-    if (error) {
-      Alert.alert('Erro ao abrir votação', error.message);
-      return;
-    }
-    setTitulo('');
-    setDescricao('');
-    setOpcoes(['Sim', 'Não']);
-    Alert.alert('Votação aberta');
-  }
-
-  return (
-    <Cartao>
-      <Campo
-        rotulo="Título da votação"
-        placeholder="Ex: Trocar o portão da garagem?"
-        value={titulo}
-        onChangeText={setTitulo}
-      />
-      <Campo
-        rotulo="Descrição / pauta (opcional)"
-        placeholder="Contexto pro morador decidir"
-        value={descricao}
-        onChangeText={setDescricao}
-        multiline
-        estilo={{ marginTop: espaco.md }}
-      />
-
-      <Text style={styles.rotulo}>Opções</Text>
-      <View style={{ gap: espaco.sm }}>
-        {opcoes.map((op, i) => (
-          <Campo
-            key={i}
-            placeholder={`Opção ${i + 1}`}
-            value={op}
-            onChangeText={(v) => atualizarOpcao(i, v)}
-          />
-        ))}
-      </View>
-      <View style={{ marginTop: espaco.sm, alignSelf: 'flex-start' }}>
-        <Link titulo="+ Adicionar opção" onPress={adicionarOpcao} />
-      </View>
-
-      <Campo
-        rotulo="Encerra em quantos dias?"
-        keyboardType="number-pad"
-        value={dias}
-        onChangeText={setDias}
-        estilo={{ marginTop: espaco.md }}
-      />
-
-      <RestritoCheckbox restrito={restrito} setRestrito={setRestrito} oQue="esta votação" />
-      <Botao titulo="Abrir votação" onPress={enviar} estilo={{ marginTop: espaco.md }} />
-    </Cartao>
-  );
-}
-
 // Gera os horários de 06:00 até 23:30, de 30 em 30 minutos
 const HORARIOS = (() => {
   const lista: string[] = [];
@@ -246,122 +75,6 @@ const HORARIOS = (() => {
   }
   return lista;
 })();
-
-export function CriarReuniaoForm() {
-  const { condominioId } = useMeuCondominio();
-  const [titulo, setTitulo] = useState('');
-  const [dataSelecionada, setDataSelecionada] = useState<Date>(new Date());
-  const [mostrarCalendario, setMostrarCalendario] = useState(false);
-  const [horario, setHorario] = useState('19:00');
-  const [local, setLocal] = useState('');
-  const [pauta, setPauta] = useState('');
-  const [restrito, setRestrito] = useState(false);
-
-  function onChangeData(event: DateTimePickerEvent, selecionada?: Date) {
-    if (Platform.OS === 'android') setMostrarCalendario(false);
-    if (event.type === 'dismissed') return;
-    if (selecionada) setDataSelecionada(selecionada);
-  }
-
-  async function enviar() {
-    if (!titulo.trim() || !condominioId) return;
-
-    const [h, min] = horario.split(':').map(Number);
-    const dataHora = new Date(dataSelecionada);
-    dataHora.setHours(h, min, 0, 0);
-
-    const { data: userData } = await supabase.auth.getUser();
-    const { error } = await supabase.from('reunioes').insert({
-      titulo: titulo.trim(),
-      data_hora: dataHora.toISOString(),
-      local: local.trim() || null,
-      pauta: pauta.trim() || null,
-      restrito,
-      condominio_id: condominioId,
-      autor_id: userData.user?.id,
-    });
-
-    if (error) {
-      Alert.alert('Erro ao agendar reunião', error.message);
-      return;
-    }
-    setTitulo('');
-    setLocal('');
-    setPauta('');
-    Alert.alert('Reunião agendada');
-  }
-
-  return (
-    <Cartao>
-      <Campo
-        rotulo="Título"
-        placeholder="Ex: Assembleia ordinária"
-        value={titulo}
-        onChangeText={setTitulo}
-      />
-
-      <Text style={styles.rotulo}>Data</Text>
-      <Pressable style={styles.dataBtn} onPress={() => setMostrarCalendario(true)}>
-        <Text style={styles.dataBtnTexto}>{formatarDataCurta(paraDataISO(dataSelecionada))}</Text>
-        <Text style={styles.dataBtnDica}>tocar para trocar</Text>
-      </Pressable>
-
-      {mostrarCalendario && (
-        <DateTimePicker
-          value={dataSelecionada}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'inline' : 'default'}
-          minimumDate={new Date()}
-          onChange={onChangeData}
-        />
-      )}
-      {Platform.OS === 'ios' && mostrarCalendario && (
-        <Botao
-          titulo="Concluído"
-          variante="secundario"
-          pequeno
-          onPress={() => setMostrarCalendario(false)}
-          estilo={{ marginTop: espaco.sm, alignSelf: 'flex-start' }}
-        />
-      )}
-
-      <Text style={styles.rotulo}>Horário</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.horariosLista}
-        contentContainerStyle={{ gap: espaco.sm }}
-      >
-        {HORARIOS.map((h) => (
-          <Chip key={h} titulo={h} ativo={horario === h} onPress={() => setHorario(h)} />
-        ))}
-      </ScrollView>
-
-      <Campo
-        rotulo="Local (opcional)"
-        placeholder="Ex: Salão de festas"
-        value={local}
-        onChangeText={setLocal}
-        estilo={{ marginTop: espaco.md }}
-      />
-      <Campo
-        rotulo="Pauta (opcional)"
-        placeholder="O que vai ser discutido"
-        value={pauta}
-        onChangeText={setPauta}
-        multiline
-        estilo={{ marginTop: espaco.md }}
-      />
-      <RestritoCheckbox restrito={restrito} setRestrito={setRestrito} oQue="esta reunião" />
-      <Botao
-        titulo="Agendar reunião"
-        onPress={enviar}
-        disabled={!titulo.trim()}
-        estilo={{ marginTop: espaco.md }}
-      />
-    </Cartao>
-  );
-}
 
 type ReuniaoAgendada = {
   id: string;
@@ -374,7 +87,7 @@ type ReuniaoAgendada = {
 /**
  * Reuniões futuras, com cancelamento. O cancelamento é soft (grava
  * `cancelada_em`) porque quem confirmou presença precisa VER que foi
- * cancelada — apagar faria a reunião sumir em silêncio da tela do morador.
+ * cancelada — apagar a linha faria a reunião sumir em silêncio.
  */
 export function ProximasReunioes() {
   const { condominioId } = useMeuCondominio();
@@ -485,30 +198,308 @@ export function ProximasReunioes() {
   );
 }
 
-const ABAS = [
-  { chave: 'aviso', label: 'Aviso' },
-  { chave: 'votacao', label: 'Votação' },
-  { chave: 'reuniao', label: 'Reunião' },
-] as const;
-
-type Aba = (typeof ABAS)[number]['chave'];
+// ---------- UM FORMULÁRIO SÓ ----------
+//
+// As três abas (Aviso · Votação · Reunião) saíram em 07/09/2026, junto com
+// as sub-abas do Oficial. Elas obrigavam o síndico a publicar três vezes a
+// mesma coisa: o aviso "vamos trocar o corrimão", depois a votação sobre o
+// orçamento, depois a assembleia que decide — e cabia ao morador juntar as
+// três de cabeça.
+//
+// Agora se escreve o aviso e, se for o caso, marca-se reunião e/ou votação
+// junto. Elas nascem penduradas nele (`aviso_id`) e aparecem dentro do card.
+// O título é o do aviso: a reunião não precisa de um título próprio quando é
+// a reunião DAQUELE aviso.
 
 export default function OficialCriarScreen() {
-  const [aba, setAba] = useState<Aba>('aviso');
+  const { condominioId } = useMeuCondominio();
+
+  const [titulo, setTitulo] = useState('');
+  const [texto, setTexto] = useState('');
+  const [fixado, setFixado] = useState(true);
+  const [restrito, setRestrito] = useState(false);
+
+  const [comReuniao, setComReuniao] = useState(false);
+  const [dataSelecionada, setDataSelecionada] = useState<Date>(new Date());
+  const [mostrarCalendario, setMostrarCalendario] = useState(false);
+  const [horario, setHorario] = useState('19:00');
+  const [local, setLocal] = useState('');
+
+  const [comVotacao, setComVotacao] = useState(false);
+  const [opcoes, setOpcoes] = useState(['Sim', 'Não']);
+  const [dias, setDias] = useState('7');
+
+  const [enviando, setEnviando] = useState(false);
+
+  function onChangeData(event: DateTimePickerEvent, selecionada?: Date) {
+    if (Platform.OS === 'android') setMostrarCalendario(false);
+    if (event.type === 'dismissed') return;
+    if (selecionada) setDataSelecionada(selecionada);
+  }
+
+  function atualizarOpcao(i: number, valor: string) {
+    const novas = [...opcoes];
+    novas[i] = valor;
+    setOpcoes(novas);
+  }
+
+  function limpar() {
+    setTitulo('');
+    setTexto('');
+    setFixado(true);
+    setRestrito(false);
+    setComReuniao(false);
+    setLocal('');
+    setComVotacao(false);
+    setOpcoes(['Sim', 'Não']);
+    setDias('7');
+  }
+
+  const opcoesValidas = opcoes.map((o) => o.trim()).filter(Boolean);
+  const votacaoOk = !comVotacao || opcoesValidas.length >= 2;
+  const podeEnviar = !!titulo.trim() && !!texto.trim() && votacaoOk && !enviando;
+
+  async function enviar() {
+    if (!condominioId || !podeEnviar) return;
+    setEnviando(true);
+
+    const { data: userData } = await supabase.auth.getUser();
+    const autor = userData.user?.id;
+
+    // O aviso primeiro, porque é dele que sai o id que os outros dois usam.
+    const { data: aviso, error: erroAviso } = await supabase
+      .from('avisos')
+      .insert({
+        titulo: titulo.trim(),
+        texto: texto.trim(),
+        fixado,
+        restrito,
+        condominio_id: condominioId,
+        autor_id: autor,
+      })
+      .select('id')
+      .single();
+
+    if (erroAviso || !aviso) {
+      setEnviando(false);
+      Alert.alert('Erro ao publicar aviso', erroAviso?.message ?? 'Não recebi o aviso de volta.');
+      return;
+    }
+
+    // Daqui pra baixo o aviso JÁ está publicado. Se um dos filhos falhar, a
+    // mensagem precisa dizer isso — senão o síndico tenta de novo e publica
+    // o mesmo aviso duas vezes.
+    const pendencias: string[] = [];
+
+    if (comReuniao) {
+      const [h, min] = horario.split(':').map(Number);
+      const dataHora = new Date(dataSelecionada);
+      dataHora.setHours(h, min, 0, 0);
+
+      const { error } = await supabase.from('reunioes').insert({
+        titulo: titulo.trim(),
+        data_hora: dataHora.toISOString(),
+        local: local.trim() || null,
+        pauta: null,
+        // O gatilho no banco reescreve isto a partir do aviso. Mandar o valor
+        // certo daqui evita depender do gatilho pra ficar coerente.
+        restrito,
+        aviso_id: aviso.id,
+        condominio_id: condominioId,
+        autor_id: autor,
+      });
+      if (error) pendencias.push(`reunião (${error.message})`);
+    }
+
+    if (comVotacao) {
+      const dataFim = new Date();
+      dataFim.setDate(dataFim.getDate() + (parseInt(dias, 10) || 7));
+
+      const { error } = await supabase.from('votacoes').insert({
+        titulo: titulo.trim(),
+        descricao: null,
+        opcoes: opcoesValidas,
+        data_fim: dataFim.toISOString(),
+        restrito,
+        aviso_id: aviso.id,
+        condominio_id: condominioId,
+        autor_id: autor,
+      });
+      if (error) pendencias.push(`votação (${error.message})`);
+    }
+
+    setEnviando(false);
+
+    if (pendencias.length) {
+      Alert.alert(
+        'Aviso publicado, mas faltou parte',
+        `O aviso foi publicado. Não consegui criar: ${pendencias.join(' e ')}.` +
+          '\n\nNão republique o aviso — isso criaria um aviso repetido.'
+      );
+      return;
+    }
+
+    limpar();
+    Alert.alert('Publicado');
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: espaco.xxl }}>
-      <Seletor opcoes={ABAS} valor={aba} aoTrocar={setAba} />
-
       <View style={styles.corpo}>
-        {aba === 'aviso' && <CriarAvisoForm />}
-        {aba === 'votacao' && <CriarVotacaoForm />}
-        {aba === 'reuniao' && (
-          <>
-            <CriarReuniaoForm />
-            <ProximasReunioes />
-          </>
-        )}
+        <Cartao>
+          <Campo
+            rotulo="Título"
+            placeholder="Ex: Manutenção do elevador"
+            value={titulo}
+            onChangeText={setTitulo}
+          />
+          <Campo
+            rotulo="Texto do aviso"
+            placeholder="O que os moradores precisam saber"
+            value={texto}
+            onChangeText={setTexto}
+            multiline
+            estilo={{ marginTop: espaco.md }}
+          />
+
+          <Checkbox
+            marcado={fixado}
+            onPress={() => setFixado(!fixado)}
+            rotulo="📌 Fixar no topo do Oficial"
+            desabilitado={restrito}
+          />
+          {restrito ? (
+            <Text style={styles.notaFixar}>
+              Aviso restrito não pode ser fixado: o destaque do topo é do prédio inteiro, e a
+              maioria nem enxergaria este aviso.
+            </Text>
+          ) : fixado ? (
+            <Text style={styles.notaFixar}>
+              Só existe um aviso fixado por vez. Publicar este desafixa o atual.
+            </Text>
+          ) : null}
+
+          <RestritoCheckbox
+            restrito={restrito}
+            setRestrito={(v) => {
+              setRestrito(v);
+              // O banco tem um check impedindo os dois juntos; desmarcar aqui
+              // evita o insert falhar com mensagem de constraint.
+              if (v) setFixado(false);
+            }}
+            oQue="este aviso"
+          />
+        </Cartao>
+
+        <Cartao estilo={{ marginTop: espaco.md }}>
+          <Checkbox
+            marcado={comReuniao}
+            onPress={() => setComReuniao(!comReuniao)}
+            rotulo="📅 Marcar uma reunião sobre isto"
+          />
+
+          {comReuniao && (
+            <>
+              <Text style={styles.rotulo}>Data</Text>
+              <Pressable style={styles.dataBtn} onPress={() => setMostrarCalendario(true)}>
+                <Text style={styles.dataBtnTexto}>
+                  {formatarDataCurta(paraDataISO(dataSelecionada))}
+                </Text>
+                <Text style={styles.dataBtnDica}>tocar para trocar</Text>
+              </Pressable>
+
+              {mostrarCalendario && (
+                <DateTimePicker
+                  value={dataSelecionada}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                  minimumDate={new Date()}
+                  onChange={onChangeData}
+                />
+              )}
+              {Platform.OS === 'ios' && mostrarCalendario && (
+                <Botao
+                  titulo="Concluído"
+                  variante="secundario"
+                  pequeno
+                  onPress={() => setMostrarCalendario(false)}
+                  estilo={{ marginTop: espaco.sm, alignSelf: 'flex-start' }}
+                />
+              )}
+
+              <Text style={styles.rotulo}>Horário</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.horariosLista}
+                contentContainerStyle={{ gap: espaco.sm }}
+              >
+                {HORARIOS.map((h) => (
+                  <Chip key={h} titulo={h} ativo={horario === h} onPress={() => setHorario(h)} />
+                ))}
+              </ScrollView>
+
+              <Campo
+                rotulo="Local (opcional)"
+                placeholder="Ex: Salão de festas"
+                value={local}
+                onChangeText={setLocal}
+                estilo={{ marginTop: espaco.md }}
+              />
+            </>
+          )}
+        </Cartao>
+
+        <Cartao estilo={{ marginTop: espaco.md }}>
+          <Checkbox
+            marcado={comVotacao}
+            onPress={() => setComVotacao(!comVotacao)}
+            rotulo="🗳️ Abrir uma votação sobre isto"
+          />
+
+          {comVotacao && (
+            <>
+              <Text style={styles.rotulo}>Opções</Text>
+              <View style={{ gap: espaco.sm }}>
+                {opcoes.map((op, i) => (
+                  <Campo
+                    key={i}
+                    placeholder={`Opção ${i + 1}`}
+                    value={op}
+                    onChangeText={(v) => atualizarOpcao(i, v)}
+                  />
+                ))}
+              </View>
+              <View style={{ marginTop: espaco.sm, alignSelf: 'flex-start' }}>
+                <Link titulo="+ Adicionar opção" onPress={() => setOpcoes([...opcoes, ''])} />
+              </View>
+
+              <Campo
+                rotulo="Encerra em quantos dias?"
+                keyboardType="number-pad"
+                value={dias}
+                onChangeText={setDias}
+                estilo={{ marginTop: espaco.md }}
+              />
+
+              {!votacaoOk && (
+                <Text style={styles.notaFixar}>
+                  Uma votação precisa de pelo menos duas opções preenchidas.
+                </Text>
+              )}
+            </>
+          )}
+        </Cartao>
+
+        <Botao
+          titulo={enviando ? 'Publicando…' : 'Publicar'}
+          onPress={enviar}
+          disabled={!podeEnviar}
+          carregando={enviando}
+          estilo={{ marginTop: espaco.lg }}
+        />
+
+        <ProximasReunioes />
       </View>
     </ScrollView>
   );

@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Pressable,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,7 +16,7 @@ import { supabase } from '../lib/supabase';
 import { useMeuCondominio } from '../lib/useMeuCondominio';
 import { formatarCompromisso, formatarData } from '../lib/datas';
 import { cores, espaco, raio, sombra } from '../lib/tema';
-import { Botao, Carregando, Etiqueta, SubAbas, Vazio } from '../components/ui';
+import { Botao, Carregando, Etiqueta, Vazio } from '../components/ui';
 import CabecalhoApp from '../components/CabecalhoApp';
 import FolhaExpandida from '../components/FolhaExpandida';
 import { useAvisoRapido } from '../components/AvisoRapido';
@@ -25,14 +26,12 @@ import RegrasScreen from './RegrasScreen';
 // aberta. Um Oficial em que cada aviso ocupa meia tela não se percorre.
 const LIMITE_TEXTO = 220;
 
-const SUB_ABAS = [
-  { chave: 'avisos', label: 'Avisos', icone: 'alert-circle-outline' },
-  { chave: 'reunioes', label: 'Reuniões', icone: 'calendar-outline' },
-  { chave: 'votacoes', label: 'Votações', icone: 'checkbox-outline' },
-  { chave: 'regras', label: 'Regras', icone: 'document-text-outline' },
-] as const;
-
-type SubAba = (typeof SUB_ABAS)[number]['chave'];
+// As sub-abas (Avisos · Reuniões · Votações · Regras) saíram em 07/09/2026.
+// Elas obrigavam o morador a saber em qual aba a informação estava antes de
+// procurá-la — e reunião e votação quase nunca nascem sozinhas: são
+// desdobramento de um aviso. Agora o aviso é o container, e o Oficial é um
+// feed só. O regimento virou um botão no topo, porque é consulta esporádica
+// e não leitura diária.
 
 type Aviso = {
   id: string;
@@ -49,6 +48,7 @@ type Votacao = {
   opcoes: string[];
   restrito: boolean;
   data_fim: string;
+  aviso_id: string | null;
 };
 type Reuniao = {
   id: string;
@@ -58,6 +58,8 @@ type Reuniao = {
   pauta: string | null;
   restrito: boolean;
   cancelada_em: string | null;
+  motivo_cancelamento: string | null;
+  aviso_id: string | null;
 };
 
 // Forma comum de aviso, reunião e votação. Os três só diferem no que vai nas
@@ -75,11 +77,21 @@ type ItemOficial = {
    *  ganha isso: se todo card abrir um parágrafo, a lista vira um paredão e
    *  o destaque deixa de destacar. Os outros ficam em título e data. */
   previa?: boolean;
-  /** Aparece no card fechado e no corpo da folha (as opções de votação). */
+  /** Bloco de informação que abre a folha, antes do texto: hoje é a data e
+   *  o local da reunião pendurada no aviso. */
+  detalhe?: ReactNode;
+  /** Corpo da folha (as opções de votação). Fica fora do card fechado de
+   *  propósito: uma enquete inteira em cada card devolveria o paredão que
+   *  esta tela acabou de perder. */
   acoes?: ReactNode;
   /** Barra fixa no rodapé da folha (confirmar presença). Quando existe, o
    *  corpo da folha não repete `acoes`. */
   rodape?: ReactNode;
+  /** Instante que ordena o feed. Aviso usa a data de publicação; reunião e
+   *  votação avulsas usam a data delas. */
+  ordem: number;
+  /** Fixado vai pro topo, acima de qualquer data. */
+  fixado?: boolean;
 };
 
 const SELO_RESTRITO = <Etiqueta texto="🔒 restrito ao gabinete" tom="restrito" />;
@@ -88,8 +100,9 @@ export default function OficialScreen() {
   const { unidadeId, podeFiscalizar, loading: carregandoVinculo, erro: erroVinculo } =
     useMeuCondominio();
 
-  const [sub, setSub] = useState<SubAba>('avisos');
   const [avisos, setAvisos] = useState<Aviso[]>([]);
+  const [versaoRegras, setVersaoRegras] = useState<number | null>(null);
+  const [regrasAbertas, setRegrasAbertas] = useState(false);
   const [votacoes, setVotacoes] = useState<Votacao[]>([]);
   const [meusVotos, setMeusVotos] = useState<Record<string, string>>({});
   // votacao_id -> opcao -> quantos votos. Alimenta as barras da enquete.
@@ -104,11 +117,6 @@ export default function OficialScreen() {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
-  function trocarSub(chave: SubAba) {
-    setAbertoId(null);
-    setSub(chave);
-  }
-
   const carregar = useCallback(async () => {
     const { data: avisosData, error: erroAvisos } = await supabase
       .from('avisos')
@@ -120,7 +128,7 @@ export default function OficialScreen() {
 
     const { data: votacoesData, error: erroVotacoes } = await supabase
       .from('votacoes')
-      .select('id, titulo, descricao, opcoes, restrito, data_fim')
+      .select('id, titulo, descricao, opcoes, restrito, data_fim, aviso_id')
       .gt('data_fim', new Date().toISOString())
       .order('data_fim', { ascending: true });
     if (erroVotacoes) Alert.alert('Erro ao carregar votações', erroVotacoes.message);
@@ -147,10 +155,17 @@ export default function OficialScreen() {
 
     const { data: reunioesData, error: erroReunioes } = await supabase
       .from('reunioes')
-      .select('id, titulo, data_hora, local, pauta, restrito, cancelada_em')
+      .select(
+        'id, titulo, data_hora, local, pauta, restrito, cancelada_em, motivo_cancelamento, aviso_id'
+      )
       .order('data_hora', { ascending: true });
     if (erroReunioes) Alert.alert('Erro ao carregar reuniões', erroReunioes.message);
     setReunioes(reunioesData ?? []);
+
+    // Só a versão: o texto inteiro é problema do RegrasScreen, que abre no
+    // modal. Aqui isso é o rótulo de um botão.
+    const { data: regrasData } = await supabase.from('regras').select('versao').maybeSingle();
+    setVersaoRegras(regrasData?.versao ?? null);
 
     if (userId) {
       const { data: rsvpsData, error: erroRsvps } = await supabase
@@ -283,92 +298,140 @@ export default function OficialScreen() {
 
   if (carregandoVinculo) return <Carregando />;
 
-  const itens: ItemOficial[] =
-    sub === 'avisos'
-      ? avisos.map((a) => ({
-          id: a.id,
-          // Restrito manda na cor da borda; fixado é sempre público, porque
-          // restrito e fixado não coexistem (check constraint no banco).
-          destaque: a.restrito ? cores.restrito : a.fixado ? cores.atencao : undefined,
-          etiquetas: (
-            <>
-              {a.restrito && SELO_RESTRITO}
-              {a.fixado && <Etiqueta texto="📌 fixado" tom="atencao" />}
-            </>
-          ),
-          titulo: a.titulo,
-          meta: formatarData(a.criado_em),
-          texto: a.texto,
-          // Um aviso por vez em evidência: o fixado. O resto se lê ao tocar.
-          previa: a.fixado,
-        }))
-      : sub === 'reunioes'
-        ? reunioes.map((r) => {
-            const confirmado = meusRsvps.has(r.id);
-            const passada = new Date(r.data_hora) < new Date();
-            const cancelada = !!r.cancelada_em;
-            return {
-              id: r.id,
-              destaque: r.restrito ? cores.restrito : cancelada ? cores.perigo : undefined,
-              etiquetas: (
-                <>
-                  {r.restrito && SELO_RESTRITO}
-                  {cancelada && <Etiqueta texto="cancelada" tom="critico" />}
-                  {!cancelada && passada && <Etiqueta texto="já passou" tom="neutro" />}
-                </>
-              ),
-              titulo: r.titulo,
-              tituloRiscado: cancelada,
-              meta: `${formatarCompromisso(r.data_hora)}${r.local ? ` · ${r.local}` : ''}`,
-              texto: r.pauta ?? '',
-              acoes:
-                !cancelada && !passada ? (
-                  <BotaoPresenca
-                    confirmado={confirmado}
-                    aoAlternar={() => toggleRsvp(r.id)}
-                    compacto
-                  />
-                ) : undefined,
-              rodape:
-                !cancelada && !passada ? (
-                  <BotaoPresenca confirmado={confirmado} aoAlternar={() => toggleRsvp(r.id)} />
-                ) : undefined,
-            };
-          })
-        : sub === 'votacoes'
-          ? votacoes.map((v) => {
-              const meuVoto = meusVotos[v.id];
-              return {
-                id: v.id,
-                destaque: v.restrito ? cores.restrito : undefined,
-                etiquetas: v.restrito ? SELO_RESTRITO : null,
-                titulo: v.titulo,
-                meta: `Encerra em ${formatarData(v.data_fim)}`,
-                texto: v.descricao ?? '',
-                acoes: (
-                  <BlocoVotacao
-                    opcoes={v.opcoes}
-                    meuVoto={meuVoto ?? null}
-                    contagem={contagem[v.id] ?? {}}
-                    mostrarApuracao={podeFiscalizar}
-                    aoVotar={(op) => votar(v.id, op)}
-                  />
-                ),
-              };
-            })
-          : [];
+  // ---------- O FEED ----------
+  //
+  // Um aviso pode carregar uma reunião e/ou uma votação, e elas aparecem
+  // DENTRO do card dele. Era exatamente essa duplicação que as sub-abas
+  // produziam: "vamos trocar o corrimão" virava um aviso, mais uma votação
+  // sobre o orçamento, mais uma assembleia — três cards em três abas, e o
+  // morador juntando os três de cabeça.
+  //
+  // O que não tem aviso continua aparecendo por conta própria. É o que
+  // mantém as linhas antigas visíveis e o que permite marcar uma reunião
+  // avulsa sem precisar inventar um aviso pra ela.
+  const reuniaoDoAviso = new Map<string, Reuniao>();
+  reunioes.forEach((r) => {
+    if (r.aviso_id) reuniaoDoAviso.set(r.aviso_id, r);
+  });
+  const votacaoDoAviso = new Map<string, Votacao>();
+  votacoes.forEach((v) => {
+    if (v.aviso_id) votacaoDoAviso.set(v.aviso_id, v);
+  });
 
-  const VAZIOS: Record<Exclude<SubAba, 'regras'>, ReactNode> = {
-    avisos: <Vazio icone="📣" titulo="Nenhum aviso no momento" />,
-    reunioes: <Vazio icone="📅" titulo="Nenhuma reunião agendada" />,
-    votacoes: (
-      <Vazio
-        icone="🗳️"
-        titulo="Nenhuma votação em andamento"
-        texto="Cada apartamento vota uma vez, direto pelo app."
+  function enquete(v: Votacao) {
+    return (
+      <BlocoVotacao
+        opcoes={v.opcoes}
+        meuVoto={meusVotos[v.id] ?? null}
+        contagem={contagem[v.id] ?? {}}
+        mostrarApuracao={podeFiscalizar}
+        aoVotar={(op) => votar(v.id, op)}
       />
-    ),
-  };
+    );
+  }
+
+  function reuniaoAtiva(r: Reuniao) {
+    return !r.cancelada_em && new Date(r.data_hora) >= new Date();
+  }
+
+  const itensAvisos: ItemOficial[] = avisos.map((a) => {
+    const r = reuniaoDoAviso.get(a.id);
+    const v = votacaoDoAviso.get(a.id);
+
+    return {
+      id: a.id,
+      // Restrito manda na cor da borda; fixado é sempre público, porque
+      // restrito e fixado não coexistem (check constraint no banco).
+      destaque: a.restrito ? cores.restrito : a.fixado ? cores.atencao : undefined,
+      etiquetas: (
+        <>
+          {a.restrito && SELO_RESTRITO}
+          {a.fixado && <Etiqueta texto="📌 fixado" tom="atencao" />}
+          {r && <Etiqueta texto="📅 tem reunião" tom="info" />}
+          {v && <Etiqueta texto="🗳️ tem votação" tom="info" />}
+        </>
+      ),
+      titulo: a.titulo,
+      meta: formatarData(a.criado_em),
+      texto: a.texto,
+      // Um aviso por vez em evidência: o fixado. O resto se lê ao tocar.
+      previa: a.fixado,
+      fixado: a.fixado,
+      ordem: new Date(a.criado_em).getTime(),
+      detalhe: r ? (
+        <View style={styles.linhaReuniao}>
+          <Text style={styles.linhaReuniaoTexto}>
+            📅 {formatarCompromisso(r.data_hora)}
+            {r.local ? ` · ${r.local}` : ''}
+          </Text>
+          {r.cancelada_em ? (
+            <Text style={styles.canceladaTexto}>
+              Cancelada{r.motivo_cancelamento ? ` — ${r.motivo_cancelamento}` : ''}
+            </Text>
+          ) : null}
+        </View>
+      ) : undefined,
+      acoes: v ? enquete(v) : undefined,
+      rodape:
+        r && reuniaoAtiva(r) ? (
+          <BotaoPresenca confirmado={meusRsvps.has(r.id)} aoAlternar={() => toggleRsvp(r.id)} />
+        ) : undefined,
+    };
+  });
+
+  const itensReuniaoAvulsa: ItemOficial[] = reunioes
+    .filter((r) => !r.aviso_id)
+    .map((r) => {
+      const passada = new Date(r.data_hora) < new Date();
+      const cancelada = !!r.cancelada_em;
+      return {
+        id: r.id,
+        destaque: r.restrito ? cores.restrito : cancelada ? cores.perigo : undefined,
+        etiquetas: (
+          <>
+            {r.restrito && SELO_RESTRITO}
+            <Etiqueta texto="📅 reunião" tom="info" />
+            {cancelada && <Etiqueta texto="cancelada" tom="critico" />}
+            {!cancelada && passada && <Etiqueta texto="já passou" tom="neutro" />}
+          </>
+        ),
+        titulo: r.titulo,
+        tituloRiscado: cancelada,
+        meta: `${formatarCompromisso(r.data_hora)}${r.local ? ` · ${r.local}` : ''}`,
+        texto: r.pauta ?? '',
+        ordem: new Date(r.data_hora).getTime(),
+        rodape:
+          reuniaoAtiva(r) ? (
+            <BotaoPresenca confirmado={meusRsvps.has(r.id)} aoAlternar={() => toggleRsvp(r.id)} />
+          ) : undefined,
+      };
+    });
+
+  const itensVotacaoAvulsa: ItemOficial[] = votacoes
+    .filter((v) => !v.aviso_id)
+    .map((v) => ({
+      id: v.id,
+      destaque: v.restrito ? cores.restrito : undefined,
+      etiquetas: (
+        <>
+          {v.restrito && SELO_RESTRITO}
+          <Etiqueta texto="🗳️ votação" tom="info" />
+        </>
+      ),
+      titulo: v.titulo,
+      meta: `Encerra em ${formatarData(v.data_fim)}`,
+      texto: v.descricao ?? '',
+      ordem: new Date(v.data_fim).getTime(),
+      acoes: enquete(v),
+    }));
+
+  // Fixado no topo, e o resto do mais recente pro mais antigo. Sem o
+  // desempate por `fixado` o aviso em destaque afundaria assim que
+  // qualquer coisa nova fosse publicada.
+  const itens = [...itensAvisos, ...itensReuniaoAvulsa, ...itensVotacaoAvulsa].sort((a, b) => {
+    if (!!a.fixado !== !!b.fixado) return a.fixado ? -1 : 1;
+    return b.ordem - a.ordem;
+  });
 
   const aberto = itens.find((i) => i.id === abertoId) ?? null;
 
@@ -376,24 +439,49 @@ export default function OficialScreen() {
     <View style={styles.container}>
       <CabecalhoApp />
 
-      <View style={{ flex: 1 }}>
-        {sub === 'regras' ? (
-          <RegrasScreen />
-        ) : (
-          <ScrollView
-            contentContainerStyle={styles.rolagem}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          >
-            {itens.length === 0
-              ? VAZIOS[sub]
-              : itens.map((i) => (
-                  <CartaoResumo key={i.id} item={i} aoAbrir={() => setAbertoId(i.id)} />
-                ))}
-          </ScrollView>
-        )}
-      </View>
+      {/* O regimento é consulta esporádica, não leitura diária: uma linha
+          fina que não disputa o topo com o aviso fixado. */}
+      <Pressable
+        onPress={() => setRegrasAbertas(true)}
+        style={({ pressed }) => [styles.botaoRegras, pressed && { opacity: 0.6 }]}
+      >
+        <Ionicons name="document-text-outline" size={20} color={cores.primaria} />
+        <Text style={styles.botaoRegrasTexto}>
+          Regimento interno{versaoRegras ? ` · versão ${versaoRegras}` : ''}
+        </Text>
+        <Ionicons name="chevron-forward" size={20} color={cores.textoFraco} />
+      </Pressable>
 
-      <SubAbas opcoes={SUB_ABAS} valor={sub} aoTrocar={trocarSub} />
+      <ScrollView
+        contentContainerStyle={styles.rolagem}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {itens.length === 0 ? (
+          <Vazio
+            icone="📣"
+            titulo="Nada publicado ainda"
+            texto="Avisos, reuniões e votações do síndico aparecem aqui."
+          />
+        ) : (
+          itens.map((i) => (
+            <CartaoResumo key={i.id} item={i} aoAbrir={() => setAbertoId(i.id)} />
+          ))
+        )}
+      </ScrollView>
+
+      <Modal
+        visible={regrasAbertas}
+        animationType="slide"
+        onRequestClose={() => setRegrasAbertas(false)}
+      >
+        <View style={styles.regrasTopo}>
+          <Text style={styles.regrasTopoTitulo}>Regimento interno</Text>
+          <Pressable onPress={() => setRegrasAbertas(false)} hitSlop={12}>
+            <Ionicons name="close" size={26} color={cores.texto} />
+          </Pressable>
+        </View>
+        <RegrasScreen />
+      </Modal>
 
       {aberto && <FolhaItem item={aberto} aoFechar={() => setAbertoId(null)} />}
     </View>
@@ -437,7 +525,6 @@ function CartaoResumo({ item, aoAbrir }: { item: ItemOficial; aoAbrir: () => voi
         {longo && <Text style={styles.lerMais}>Ler mais</Text>}
       </Pressable>
 
-      {item.acoes ? <View style={styles.acoes}>{item.acoes}</View> : null}
     </View>
   );
 }
@@ -458,6 +545,7 @@ function FolhaItem({ item, aoFechar }: { item: ItemOficial; aoFechar: () => void
               {item.titulo}
             </Text>
             {item.meta ? <Text style={styles.folhaMeta}>{item.meta}</Text> : null}
+            {item.detalhe}
 
             {item.texto ? (
               <>
@@ -466,10 +554,9 @@ function FolhaItem({ item, aoFechar }: { item: ItemOficial; aoFechar: () => void
               </>
             ) : null}
 
-            {/* Com rodapé fixo, repetir a mesma ação no corpo só duplicaria. */}
-            {item.acoes && !item.rodape ? (
-              <View style={styles.folhaAcoes}>{item.acoes}</View>
-            ) : null}
+            {/* A enquete vive aqui, e o botão de presença no rodapé: são
+                coisas diferentes, então uma não duplica a outra. */}
+            {item.acoes ? <View style={styles.folhaAcoes}>{item.acoes}</View> : null}
           </ScrollView>
         </View>
       )}
@@ -683,6 +770,43 @@ function BotaoPresenca({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: cores.fundo },
   rolagem: { padding: espaco.md, paddingBottom: espaco.xl },
+
+  botaoRegras: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espaco.sm,
+    marginHorizontal: espaco.md,
+    marginTop: espaco.md,
+    paddingVertical: espaco.md,
+    paddingHorizontal: espaco.md,
+    backgroundColor: cores.superficie,
+    borderRadius: raio.sm,
+    borderWidth: 1,
+    borderColor: cores.borda,
+  },
+  botaoRegrasTexto: { flex: 1, fontSize: 15, fontWeight: '700', color: cores.texto },
+
+  regrasTopo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 52,
+    paddingBottom: espaco.md,
+    paddingHorizontal: espaco.xl,
+    backgroundColor: cores.superficie,
+    borderBottomWidth: 1,
+    borderBottomColor: cores.borda,
+  },
+  regrasTopoTitulo: { fontSize: 19, fontWeight: '800', color: cores.texto },
+
+  linhaReuniao: {
+    marginTop: espaco.md,
+    padding: espaco.md,
+    backgroundColor: cores.primariaFundo,
+    borderRadius: raio.sm,
+  },
+  linhaReuniaoTexto: { fontSize: 16, fontWeight: '700', color: cores.primaria },
+  canceladaTexto: { fontSize: 14, color: cores.perigo, marginTop: espaco.xs },
 
   card: {
     backgroundColor: cores.superficie,
